@@ -6,8 +6,6 @@ As consultas deste diretório usam exclusivamente as tabelas Gold produzidas pel
 - `gold_superadmin_usuarios`
 - `gold_superadmin_rpa`
 
-## Dashboard de Chamados
-
 Use `chamados.sql` para criar:
 
 - cards de total, abertos, finalizados e tempo médio;
