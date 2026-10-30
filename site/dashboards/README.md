@@ -6,10 +6,6 @@ As consultas deste diretório usam exclusivamente as tabelas Gold produzidas pel
 - `gold_superadmin_usuarios`
 - `gold_superadmin_rpa`
 
-O notebook `../notebooks/dashboard_site.ipynb` gera os painéis finais em Python com Matplotlib. Ele deve ser executado em um compute Python, como Serverless CPU ou GPU. Ele possui widgets interativos para status, categoria, responsável, período e nível de acesso. O notebook `../notebooks/visualizacoes_site.ipynb` permanece como versão exploratória das visualizações.
-
-## Dashboard de Chamados
-
 Use `chamados.sql` para criar:
 
 - cards de total, abertos, finalizados e tempo médio;
