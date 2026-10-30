@@ -22,3 +22,5 @@ Esta área prepara os dados dos dashboards de **Chamados** e **Superadmin**.
 - `gold_superadmin_rpa`
 
 Os notebooks em `notebooks/` preparam as camadas Bronze, Silver e Gold dessas bases. A pasta `pipeline/` receberá a execução automatizada das mesmas transformações.
+
+O notebook `notebooks/dashboard_site.ipynb` gera os painéis visuais finais de Chamados e Superadmin com cards, barras, linhas, histograma e boxplot.
