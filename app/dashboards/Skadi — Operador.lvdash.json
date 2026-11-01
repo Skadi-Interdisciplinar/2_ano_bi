@@ -1,0 +1,1591 @@
+{
+  "datasets": [
+    {
+      "name": "ds_operador_kpis",
+      "displayName": "KPIs por operador",
+      "queryLines": [
+        "SELECT\n",
+        "  id_usuario,\n",
+        "  nome_funcionario,\n",
+        "  alertas_atribuidos_a_mim,\n",
+        "  alertas_criticos,\n",
+        "  sla_vencido,\n",
+        "  resolvidos_hoje\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_funcionario_kpis\n"
+      ]
+    },
+    {
+      "name": "ds_operador_fila",
+      "displayName": "Fila de atendimentos",
+      "queryLines": [
+        "SELECT\n",
+        "  id_alerta,\n",
+        "  CONCAT('Câmara ', id_camara) AS camara,\n",
+        "  localizacao,\n",
+        "  CASE gravidade_padronizada\n",
+        "    WHEN 'CRITICO' THEN 'Crítico'\n",
+        "    WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "    WHEN 'BAIXO' THEN 'Baixo'\n",
+        "    WHEN 'OUTRA' THEN 'Outra'\n",
+        "    ELSE gravidade_padronizada\n",
+        "  END AS gravidade,\n",
+        "  CASE status_atendimento\n",
+        "    WHEN 'PENDENTE' THEN 'Pendente'\n",
+        "    WHEN 'EM_ANDAMENTO' THEN 'Em andamento'\n",
+        "    ELSE status_atendimento\n",
+        "  END AS situacao,\n",
+        "  DATE_FORMAT(\n",
+        "    CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', data_hora_alerta),\n",
+        "    'dd/MM/yyyy HH:mm'\n",
+        "  ) AS abertura_texto,\n",
+        "  CASE\n",
+        "    WHEN minutos_restantes_sla IS NULL THEN 'Sem referência'\n",
+        "    WHEN minutos_restantes_sla < 0 THEN CONCAT(\n",
+        "      'Vencido há ', FLOOR(ABS(minutos_restantes_sla) / 60), 'h ',\n",
+        "      LPAD(CAST(MOD(ABS(minutos_restantes_sla), 60) AS STRING), 2, '0'), 'min'\n",
+        "    )\n",
+        "    ELSE CONCAT(\n",
+        "      FLOOR(minutos_restantes_sla / 60), 'h ',\n",
+        "      LPAD(CAST(MOD(minutos_restantes_sla, 60) AS STRING), 2, '0'), 'min'\n",
+        "    )\n",
+        "  END AS prazo_restante,\n",
+        "  CASE\n",
+        "    WHEN ROW_NUMBER() OVER (PARTITION BY id_usuario ORDER BY prioridade_fila, ordem_dentro_prioridade) = 1\n",
+        "    THEN 'Próxima ocorrência'\n",
+        "    ELSE ''\n",
+        "  END AS destaque,\n",
+        "  nome_funcionario,\n",
+        "  prioridade_fila,\n",
+        "  ordem_dentro_prioridade\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_funcionario_fila\n",
+        "ORDER BY\n",
+        "  prioridade_fila,\n",
+        "  ordem_dentro_prioridade\n"
+      ]
+    },
+    {
+      "name": "ds_operador_dist_situacao",
+      "displayName": "Fila por situação",
+      "queryLines": [
+        "WITH base AS (\n",
+        "  SELECT nome_funcionario, CASE gravidade_padronizada\n",
+        "      WHEN 'CRITICO' THEN 'Crítico'\n",
+        "      WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "      WHEN 'BAIXO' THEN 'Baixo'\n",
+        "      WHEN 'OUTRA' THEN 'Outra'\n",
+        "      ELSE gravidade_padronizada\n",
+        "    END AS gravidade, CASE status_atendimento\n",
+        "      WHEN 'PENDENTE' THEN 'Pendente'\n",
+        "      WHEN 'EM_ANDAMENTO' THEN 'Em andamento'\n",
+        "      ELSE status_atendimento\n",
+        "    END AS situacao, id_alerta\n",
+        "  FROM workspace.gold_app.gold_app_funcionario_fila\n",
+        ")\n",
+        "SELECT nome_funcionario, situacao, gravidade, COUNT(DISTINCT id_alerta) AS alertas\n",
+        "FROM base\n",
+        "GROUP BY nome_funcionario, situacao, gravidade\n"
+      ]
+    },
+    {
+      "name": "ds_operador_dist_gravidade",
+      "displayName": "Fila por gravidade",
+      "queryLines": [
+        "WITH base AS (\n",
+        "  SELECT nome_funcionario, CASE gravidade_padronizada\n",
+        "      WHEN 'CRITICO' THEN 'Crítico'\n",
+        "      WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "      WHEN 'BAIXO' THEN 'Baixo'\n",
+        "      WHEN 'OUTRA' THEN 'Outra'\n",
+        "      ELSE gravidade_padronizada\n",
+        "    END AS gravidade, CASE status_atendimento\n",
+        "      WHEN 'PENDENTE' THEN 'Pendente'\n",
+        "      WHEN 'EM_ANDAMENTO' THEN 'Em andamento'\n",
+        "      ELSE status_atendimento\n",
+        "    END AS situacao, id_alerta\n",
+        "  FROM workspace.gold_app.gold_app_funcionario_fila\n",
+        ")\n",
+        "SELECT nome_funcionario, gravidade, situacao, COUNT(DISTINCT id_alerta) AS alertas\n",
+        "FROM base\n",
+        "GROUP BY nome_funcionario, gravidade, situacao\n"
+      ]
+    },
+    {
+      "name": "ds_operador_dist_prazo",
+      "displayName": "Fila por prazo (SLA)",
+      "queryLines": [
+        "WITH base AS (\n",
+        "  SELECT nome_funcionario, CASE gravidade_padronizada\n",
+        "      WHEN 'CRITICO' THEN 'Crítico'\n",
+        "      WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "      WHEN 'BAIXO' THEN 'Baixo'\n",
+        "      WHEN 'OUTRA' THEN 'Outra'\n",
+        "      ELSE gravidade_padronizada\n",
+        "    END AS gravidade, CASE status_atendimento\n",
+        "      WHEN 'PENDENTE' THEN 'Pendente'\n",
+        "      WHEN 'EM_ANDAMENTO' THEN 'Em andamento'\n",
+        "      ELSE status_atendimento\n",
+        "    END AS situacao,\n",
+        "    CASE estado_sla\n",
+        "      WHEN 'NO_PRAZO' THEN 'No prazo'\n",
+        "      WHEN 'PROXIMO_VENCIMENTO' THEN 'Próximo do vencimento'\n",
+        "      WHEN 'SLA_VENCIDO' THEN 'Vencido'\n",
+        "      WHEN estado_sla IS NULL THEN 'Sem referência'\n",
+        "      ELSE estado_sla\n",
+        "    END AS prazo,\n",
+        "    id_alerta\n",
+        "  FROM workspace.gold_app.gold_app_funcionario_fila\n",
+        ")\n",
+        "SELECT nome_funcionario, prazo, gravidade, situacao, COUNT(DISTINCT id_alerta) AS alertas\n",
+        "FROM base\n",
+        "GROUP BY nome_funcionario, prazo, gravidade, situacao\n"
+      ]
+    },
+    {
+      "name": "ds_operador_leituras",
+      "displayName": "Leituras de temperatura por ocorrência",
+      "queryLines": [
+        "SELECT\n",
+        "  l.id_alerta,\n",
+        "  k.nome_funcionario,\n",
+        "  CONCAT('Câmara ', l.id_camara) AS camara,\n",
+        "  CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', l.data_hora_leitura) AS data_hora,\n",
+        "  CAST(l.temperatura AS DOUBLE) AS valor,\n",
+        "  'Temperatura' AS serie\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_funcionario_leituras l\n",
+        "  LEFT JOIN workspace.gold_app.gold_app_funcionario_kpis k ON l.id_usuario = k.id_usuario\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  l.id_alerta,\n",
+        "  k.nome_funcionario,\n",
+        "  CONCAT('Câmara ', l.id_camara),\n",
+        "  CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', l.data_hora_leitura),\n",
+        "  CAST(l.temperatura_min AS DOUBLE),\n",
+        "  'Limite mínimo'\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_funcionario_leituras l\n",
+        "  LEFT JOIN workspace.gold_app.gold_app_funcionario_kpis k ON l.id_usuario = k.id_usuario\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  l.id_alerta,\n",
+        "  k.nome_funcionario,\n",
+        "  CONCAT('Câmara ', l.id_camara),\n",
+        "  CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', l.data_hora_leitura),\n",
+        "  CAST(l.temperatura_max AS DOUBLE),\n",
+        "  'Limite máximo'\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_funcionario_leituras l\n",
+        "  LEFT JOIN workspace.gold_app.gold_app_funcionario_kpis k ON l.id_usuario = k.id_usuario\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  r.id_alerta,\n",
+        "  k.nome_funcionario,\n",
+        "  CONCAT('Câmara ', r.id_camara),\n",
+        "  CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', r.data_hora_leitura),\n",
+        "  CAST(r.temperatura AS DOUBLE),\n",
+        "  'Início da ocorrência'\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT id_alerta, id_usuario, id_camara, data_hora_leitura, temperatura,\n",
+        "      ROW_NUMBER() OVER (PARTITION BY id_alerta ORDER BY data_hora_leitura) AS rn\n",
+        "    FROM workspace.gold_app.gold_app_funcionario_leituras\n",
+        "    WHERE leitura_apos_inicio_alerta = TRUE\n",
+        "  ) r\n",
+        "  LEFT JOIN workspace.gold_app.gold_app_funcionario_kpis k ON r.id_usuario = k.id_usuario\n",
+        "WHERE r.rn = 1\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  m.id_alerta,\n",
+        "  k.nome_funcionario,\n",
+        "  CONCAT('Câmara ', m.id_camara),\n",
+        "  CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', m.data_hora_leitura),\n",
+        "  CAST(m.temperatura AS DOUBLE),\n",
+        "  'Início do atendimento'\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT l.id_alerta, l.id_usuario, l.id_camara, l.data_hora_leitura, l.temperatura,\n",
+        "      ROW_NUMBER() OVER (PARTITION BY l.id_alerta ORDER BY l.data_hora_leitura) AS rn\n",
+        "    FROM workspace.gold_app.gold_app_funcionario_leituras l\n",
+        "      JOIN workspace.gold_app.gold_app_funcionario_fila f ON l.id_alerta = f.id_alerta\n",
+        "    WHERE f.data_hora_reconhecimento IS NOT NULL\n",
+        "      AND l.data_hora_leitura >= f.data_hora_reconhecimento\n",
+        "  ) m\n",
+        "  LEFT JOIN workspace.gold_app.gold_app_funcionario_kpis k ON m.id_usuario = k.id_usuario\n",
+        "WHERE m.rn = 1\n"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "eef033cf",
+      "displayName": "Painel",
+      "layout": [
+        {
+          "widget": {
+            "name": "logo",
+            "imageSpec": {
+              "image": {
+                "source": {
+                  "url": "https://dbc-917353eb-e6cf.cloud.databricks.com/ajax-api/2.0/workspace/export?path=/Users/marianaproque400%40gmail.com/logo%20azul%20com%20fundo.png&direct_download=true&format=AUTO&o=7474646794600881"
+                },
+                "altText": "Logo Skadi"
+              },
+              "frame": {},
+              "style": {}
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "txt_titulo",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Skadi — Operador"
+              ]
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 5,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "txt_descricao",
+            "multilineTextboxSpec": {
+              "lines": [
+                "Fila de atendimento e temperatura das ocorrências. O seletor de operador serve à análise no Databricks; o acesso no app é controlado pelo backend."
+              ]
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_operador",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/50ba85e11f2940e58dfc6b65e3da1130_nome_funcionario",
+                "query": {
+                  "datasetName": "ds_operador_kpis",
+                  "fields": [
+                    {
+                      "name": "nome_funcionario",
+                      "expression": "`nome_funcionario`"
+                    },
+                    {
+                      "name": "nome_funcionario_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/2fc1772502a94871805f072cd7fa7709_nome_funcionario",
+                "query": {
+                  "datasetName": "ds_operador_fila",
+                  "fields": [
+                    {
+                      "name": "nome_funcionario",
+                      "expression": "`nome_funcionario`"
+                    },
+                    {
+                      "name": "nome_funcionario_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/c94c017f8e5d4152b65885a33837a1fc_nome_funcionario",
+                "query": {
+                  "datasetName": "ds_operador_dist_situacao",
+                  "fields": [
+                    {
+                      "name": "nome_funcionario",
+                      "expression": "`nome_funcionario`"
+                    },
+                    {
+                      "name": "nome_funcionario_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/825f9acfab384dba9984ccc42a105bac_nome_funcionario",
+                "query": {
+                  "datasetName": "ds_operador_dist_gravidade",
+                  "fields": [
+                    {
+                      "name": "nome_funcionario",
+                      "expression": "`nome_funcionario`"
+                    },
+                    {
+                      "name": "nome_funcionario_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/100017f83da547fcb595da97e62d44d3_nome_funcionario",
+                "query": {
+                  "datasetName": "ds_operador_dist_prazo",
+                  "fields": [
+                    {
+                      "name": "nome_funcionario",
+                      "expression": "`nome_funcionario`"
+                    },
+                    {
+                      "name": "nome_funcionario_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/6e6a75bc5b7a4914aa9424116335021d_nome_funcionario",
+                "query": {
+                  "datasetName": "ds_operador_leituras",
+                  "fields": [
+                    {
+                      "name": "nome_funcionario",
+                      "expression": "`nome_funcionario`"
+                    },
+                    {
+                      "name": "nome_funcionario_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Operador"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "nome_funcionario",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/50ba85e11f2940e58dfc6b65e3da1130_nome_funcionario"
+                  },
+                  {
+                    "fieldName": "nome_funcionario",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/2fc1772502a94871805f072cd7fa7709_nome_funcionario"
+                  },
+                  {
+                    "fieldName": "nome_funcionario",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/c94c017f8e5d4152b65885a33837a1fc_nome_funcionario"
+                  },
+                  {
+                    "fieldName": "nome_funcionario",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/825f9acfab384dba9984ccc42a105bac_nome_funcionario"
+                  },
+                  {
+                    "fieldName": "nome_funcionario",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/100017f83da547fcb595da97e62d44d3_nome_funcionario"
+                  },
+                  {
+                    "fieldName": "nome_funcionario",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/6e6a75bc5b7a4914aa9424116335021d_nome_funcionario"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_gravidade",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/748e29f6aff449a982d6aae861126864_gravidade",
+                "query": {
+                  "datasetName": "ds_operador_fila",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "gravidade_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/7571a3138d484e9bbd605fba03316552_gravidade",
+                "query": {
+                  "datasetName": "ds_operador_dist_situacao",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "gravidade_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/a13b28d852b646d5af805f46dc772fbe_gravidade",
+                "query": {
+                  "datasetName": "ds_operador_dist_gravidade",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "gravidade_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/f4ee2ed95f9740128d0e7043f338f910_gravidade",
+                "query": {
+                  "datasetName": "ds_operador_dist_prazo",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "gravidade_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Gravidade"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "gravidade",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/748e29f6aff449a982d6aae861126864_gravidade"
+                  },
+                  {
+                    "fieldName": "gravidade",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/7571a3138d484e9bbd605fba03316552_gravidade"
+                  },
+                  {
+                    "fieldName": "gravidade",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/a13b28d852b646d5af805f46dc772fbe_gravidade"
+                  },
+                  {
+                    "fieldName": "gravidade",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/f4ee2ed95f9740128d0e7043f338f910_gravidade"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_situacao",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/f3096277707b4be5aad192dc5d000cee_situacao",
+                "query": {
+                  "datasetName": "ds_operador_fila",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "situacao_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/8b362efa52d64005b05d367c3ba90507_situacao",
+                "query": {
+                  "datasetName": "ds_operador_dist_situacao",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "situacao_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/b93b6316480a41aa90a12e1362125954_situacao",
+                "query": {
+                  "datasetName": "ds_operador_dist_gravidade",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "situacao_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/84b3f5bf0c24488fabb07dba0517b8a3_situacao",
+                "query": {
+                  "datasetName": "ds_operador_dist_prazo",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "situacao_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Situação"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "situacao",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/f3096277707b4be5aad192dc5d000cee_situacao"
+                  },
+                  {
+                    "fieldName": "situacao",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/8b362efa52d64005b05d367c3ba90507_situacao"
+                  },
+                  {
+                    "fieldName": "situacao",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/b93b6316480a41aa90a12e1362125954_situacao"
+                  },
+                  {
+                    "fieldName": "situacao",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/84b3f5bf0c24488fabb07dba0517b8a3_situacao"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_alerta",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/f486b9a5582844c29a02e199f1e40443_id_alerta",
+                "query": {
+                  "datasetName": "ds_operador_leituras",
+                  "fields": [
+                    {
+                      "name": "id_alerta",
+                      "expression": "`id_alerta`"
+                    },
+                    {
+                      "name": "id_alerta_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Alerta (temperatura)"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "id_alerta",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/f486b9a5582844c29a02e199f1e40443_id_alerta"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_periodo",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/0ae430f546f14d9f8f324cbaf5bd44bc_data_hora",
+                "query": {
+                  "datasetName": "ds_operador_leituras",
+                  "fields": [
+                    {
+                      "name": "data_hora",
+                      "expression": "`data_hora`"
+                    },
+                    {
+                      "name": "data_hora_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Período"
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "data_hora",
+                    "queryName": "dashboards/01f1d598fda419a4b58e07b6d40e3c9f/datasets/0ae430f546f14d9f8f324cbaf5bd44bc_data_hora"
+                  }
+                ]
+              },
+              "presets": [
+                "now-6h~now",
+                "now-24h/h~now/h",
+                "now-7d/d~now/d"
+              ]
+            }
+          },
+          "position": {
+            "x": 10,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_atribuidos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(alertas_atribuidos_a_mim)",
+                      "expression": "SUM(`alertas_atribuidos_a_mim`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas atribuídos a mim"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(alertas_atribuidos_a_mim)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_criticos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(alertas_criticos)",
+                      "expression": "SUM(`alertas_criticos`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas críticos"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(alertas_criticos)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_sla_vencido",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(sla_vencido)",
+                      "expression": "SUM(`sla_vencido`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas com SLA vencido"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(sla_vencido)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_resolvidos_hoje",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(resolvidos_hoje)",
+                      "expression": "SUM(`resolvidos_hoje`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas resolvidos hoje"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(resolvidos_hoje)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_fila_situacao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_dist_situacao",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "sum(alertas)",
+                      "expression": "SUM(`alertas`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Minha fila por situação"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "situacao",
+                  "axis": {
+                    "title": "Situação"
+                  },
+                  "displayName": "Situação",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(alertas)",
+                  "axis": {
+                    "title": "Alertas"
+                  },
+                  "displayName": "Alertas",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "situacao",
+                  "displayName": "Situação",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 4,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_fila_gravidade",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_dist_gravidade",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "sum(alertas)",
+                      "expression": "SUM(`alertas`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Minha fila por gravidade"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "gravidade",
+                  "axis": {
+                    "title": "Gravidade"
+                  },
+                  "displayName": "Gravidade",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(alertas)",
+                  "axis": {
+                    "title": "Alertas"
+                  },
+                  "displayName": "Alertas",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "gravidade",
+                  "displayName": "Gravidade",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 8,
+            "width": 4,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_fila_prazo",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_dist_prazo",
+                  "fields": [
+                    {
+                      "name": "prazo",
+                      "expression": "`prazo`"
+                    },
+                    {
+                      "name": "sum(alertas)",
+                      "expression": "SUM(`alertas`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Minha fila por prazo"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "prazo",
+                  "axis": {
+                    "title": "Prazo"
+                  },
+                  "displayName": "Prazo",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(alertas)",
+                  "axis": {
+                    "title": "Alertas"
+                  },
+                  "displayName": "Alertas",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "prazo",
+                  "displayName": "Prazo",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 8,
+            "width": 4,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "nota_sla",
+            "multilineTextboxSpec": {
+              "lines": [
+                "**Critérios de SLA e de câmara offline pendentes de aprovação de negócio** — os estados de prazo exibidos refletem a regra vigente na base Gold e não a validam."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "line_temperatura",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_leituras",
+                  "fields": [
+                    {
+                      "name": "serie",
+                      "expression": "`serie`"
+                    },
+                    {
+                      "name": "data_hora",
+                      "expression": "`data_hora`"
+                    },
+                    {
+                      "name": "avg(valor)",
+                      "expression": "AVG(`valor`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Temperatura da ocorrência (°C)"
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "data_hora",
+                  "axis": {
+                    "title": "Data/hora da leitura"
+                  },
+                  "displayName": "Data/hora da leitura",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(valor)",
+                  "axis": {
+                    "title": "Temperatura (°C)"
+                  },
+                  "displayName": "Temperatura (°C)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "serie",
+                  "legend": {
+                    "position": "right",
+                    "title": "Série"
+                  },
+                  "displayName": "Série",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 12,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "tabela_fila",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_operador_fila",
+                  "fields": [
+                    {
+                      "name": "destaque",
+                      "expression": "`destaque`"
+                    },
+                    {
+                      "name": "id_alerta",
+                      "expression": "`id_alerta`"
+                    },
+                    {
+                      "name": "camara",
+                      "expression": "`camara`"
+                    },
+                    {
+                      "name": "localizacao",
+                      "expression": "`localizacao`"
+                    },
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "abertura_texto",
+                      "expression": "`abertura_texto`"
+                    },
+                    {
+                      "name": "prazo_restante",
+                      "expression": "`prazo_restante`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Minha fila"
+              },
+              "displayRowNumbers": false,
+              "rowsPerPage": 10,
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "destaque",
+                    "displayName": "Próxima",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "id_alerta",
+                    "displayName": "Alerta",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "camara",
+                    "displayName": "Câmara",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "localizacao",
+                    "displayName": "Localização",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "gravidade",
+                    "displayName": "Gravidade",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "situacao",
+                    "displayName": "Situação",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "abertura_texto",
+                    "displayName": "Abertura",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "prazo_restante",
+                    "displayName": "Prazo restante",
+                    "useForSearch": true
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 25,
+            "width": 12,
+            "height": 10
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#0A1B30",
+        "dark": "#0A1B30"
+      },
+      "widgetBackgroundColor": {
+        "light": "#0F2E4F",
+        "dark": "#0F2E4F"
+      },
+      "widgetBorderColor": {
+        "light": "#1F4468",
+        "dark": "#1F4468"
+      },
+      "fontColor": {
+        "light": "#C3D3E2",
+        "dark": "#C3D3E2"
+      },
+      "selectionColor": {
+        "light": "#2E8FEA",
+        "dark": "#2E8FEA"
+      },
+      "visualizationColors": [
+        "#2E8FEA",
+        "#A8D8FF",
+        "#55D8FF",
+        "#718096",
+        "#93A9BE",
+        "#4A6FA5",
+        "#1B4F8A",
+        "#2D3748",
+        "#B8D4EC",
+        "#5E7C97",
+        "#8FB8D8",
+        "#C3D3E2"
+      ],
+      "widgetHeaderAlignment": "LEFT",
+      "fontFamily": "Inter",
+      "widgetPadding": 12,
+      "widgetMargin": 8,
+      "widgetCornerRadius": 8,
+      "widgetShadow": 0,
+      "continuousGradient": {
+        "lightMode": {
+          "fromCategoricalIndex": 0
+        },
+        "darkMode": {
+          "fromCategoricalIndex": 0
+        }
+      },
+      "fontSettings": {
+        "base": {
+          "fontFamily": "Inter",
+          "fontColor": {
+            "light": "#C3D3E2",
+            "dark": "#C3D3E2"
+          },
+          "fontSize": 12,
+          "fontWeight": 400
+        },
+        "widgetTitle": {
+          "fontColor": {
+            "light": "#A8D8FF",
+            "dark": "#A8D8FF"
+          },
+          "fontSize": 13,
+          "fontWeight": 600
+        },
+        "widgetDescription": {
+          "fontSize": 12,
+          "fontWeight": 400
+        },
+        "fieldTitle": {
+          "textCase": "TEXT_CASE_UPPERCASE",
+          "fontColor": {
+            "light": "#718096",
+            "dark": "#718096"
+          },
+          "fontSize": 11,
+          "fontWeight": 400
+        },
+        "fieldValue": {
+          "fontColor": {
+            "light": "#C3D3E2",
+            "dark": "#C3D3E2"
+          },
+          "fontSize": 11,
+          "fontWeight": 400
+        }
+      },
+      "gridLineColor": {
+        "light": "#1F4468",
+        "dark": "#1F4468"
+      },
+      "axisLineColor": {
+        "light": "#2F5A80",
+        "dark": "#2F5A80"
+      },
+      "visualizationColorMappings": [
+        {
+          "value": "Registrado",
+          "color": "#718096"
+        },
+        {
+          "value": "Em atendimento",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Atendido",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Aberturas",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Finalizações",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Crítico",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Atenção",
+          "color": "#55D8FF"
+        },
+        {
+          "value": "Baixo",
+          "color": "#718096"
+        },
+        {
+          "value": "Outra",
+          "color": "#93A9BE"
+        },
+        {
+          "value": "Em andamento",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Pendente com responsável",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Pendente",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Sem responsável",
+          "color": "#718096"
+        },
+        {
+          "value": "Estáveis",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Fora da faixa",
+          "color": "#55D8FF"
+        },
+        {
+          "value": "Offline",
+          "color": "#718096"
+        },
+        {
+          "value": "Sem dados",
+          "color": "#93A9BE"
+        },
+        {
+          "value": "No prazo",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Próximo do vencimento",
+          "color": "#55D8FF"
+        },
+        {
+          "value": "Vencido",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Sem referência",
+          "color": "#718096"
+        },
+        {
+          "value": "Temperatura",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Limite mínimo",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Limite máximo",
+          "color": "#55D8FF"
+        },
+        {
+          "value": "Início da ocorrência",
+          "color": "#4A6FA5"
+        },
+        {
+          "value": "Início do atendimento",
+          "color": "#B8D4EC"
+        }
+      ]
+    },
+    "applyModeEnabled": false
+  }
+}

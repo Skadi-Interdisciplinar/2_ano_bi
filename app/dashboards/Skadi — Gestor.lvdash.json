@@ -1,0 +1,1529 @@
+{
+  "datasets": [
+    {
+      "name": "ds_gestor_kpis",
+      "displayName": "KPIs por CD (Gestor)",
+      "queryLines": [
+        "SELECT\n",
+        "  id_cd,\n",
+        "  nome_cd,\n",
+        "  total_camaras,\n",
+        "  alertas_criticos,\n",
+        "  sla_vencido,\n",
+        "  resolvidos_hoje\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_kpis\n"
+      ]
+    },
+    {
+      "name": "ds_gestor_estados",
+      "displayName": "Estado das câmaras por CD",
+      "queryLines": [
+        "SELECT\n",
+        "  id_cd,\n",
+        "  nome_cd,\n",
+        "  'Estáveis' AS estado,\n",
+        "  camaras_estaveis AS qtd\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_kpis\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  id_cd,\n",
+        "  nome_cd,\n",
+        "  'Fora da faixa',\n",
+        "  camaras_em_alerta_temperatura\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_kpis\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  id_cd,\n",
+        "  nome_cd,\n",
+        "  'Offline',\n",
+        "  camaras_offline\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_kpis\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  id_cd,\n",
+        "  nome_cd,\n",
+        "  'Sem dados',\n",
+        "  camaras_sem_dados\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_kpis\n"
+      ]
+    },
+    {
+      "name": "ds_gestor_alertas_camara",
+      "displayName": "Alertas abertos por câmara e gravidade",
+      "queryLines": [
+        "WITH base AS (\n",
+        "  SELECT\n",
+        "    nome_cd,\n",
+        "    CONCAT('Câmara ', id_camara) AS camara,\n",
+        "    CASE gravidade_padronizada\n",
+        "      WHEN 'CRITICO' THEN 'Crítico'\n",
+        "      WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "      WHEN 'BAIXO' THEN 'Baixo'\n",
+        "      WHEN 'OUTRA' THEN 'Outra'\n",
+        "      ELSE gravidade_padronizada\n",
+        "    END AS gravidade,\n",
+        "    CASE\n",
+        "      WHEN status_atendimento = 'EM_ANDAMENTO' THEN 'Em atendimento'\n",
+        "      WHEN id_usuario_responsavel IS NULL THEN 'Sem responsável'\n",
+        "      WHEN status_atendimento = 'PENDENTE' THEN 'Pendente com responsável'\n",
+        "      ELSE 'Combinação não prevista'\n",
+        "    END AS situacao,\n",
+        "    id_alerta\n",
+        "  FROM\n",
+        "    workspace.gold_app.gold_app_gestor_prioridades\n",
+        ")\n",
+        "SELECT\n",
+        "  nome_cd,\n",
+        "  camara,\n",
+        "  gravidade,\n",
+        "  situacao,\n",
+        "  COUNT(DISTINCT id_alerta) AS alertas\n",
+        "FROM\n",
+        "  base\n",
+        "GROUP BY\n",
+        "  nome_cd,\n",
+        "  camara,\n",
+        "  gravidade,\n",
+        "  situacao\n"
+      ]
+    },
+    {
+      "name": "ds_gestor_situacao",
+      "displayName": "Situação dos alertas abertos",
+      "queryLines": [
+        "WITH base AS (\n",
+        "  SELECT\n",
+        "    nome_cd,\n",
+        "    CASE gravidade_padronizada\n",
+        "      WHEN 'CRITICO' THEN 'Crítico'\n",
+        "      WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "      WHEN 'BAIXO' THEN 'Baixo'\n",
+        "      WHEN 'OUTRA' THEN 'Outra'\n",
+        "      ELSE gravidade_padronizada\n",
+        "    END AS gravidade,\n",
+        "    CASE\n",
+        "      WHEN status_atendimento = 'EM_ANDAMENTO' THEN 'Em atendimento'\n",
+        "      WHEN id_usuario_responsavel IS NULL THEN 'Sem responsável'\n",
+        "      WHEN status_atendimento = 'PENDENTE' THEN 'Pendente com responsável'\n",
+        "      ELSE 'Combinação não prevista'\n",
+        "    END AS situacao,\n",
+        "    id_alerta\n",
+        "  FROM\n",
+        "    workspace.gold_app.gold_app_gestor_prioridades\n",
+        ")\n",
+        "SELECT\n",
+        "  nome_cd,\n",
+        "  situacao,\n",
+        "  gravidade,\n",
+        "  COUNT(DISTINCT id_alerta) AS alertas\n",
+        "FROM\n",
+        "  base\n",
+        "GROUP BY\n",
+        "  nome_cd,\n",
+        "  situacao,\n",
+        "  gravidade\n"
+      ]
+    },
+    {
+      "name": "ds_gestor_tendencia",
+      "displayName": "Tendência de temperatura por câmara",
+      "queryLines": [
+        "SELECT\n",
+        "  nome_cd,\n",
+        "  CONCAT('Câmara ', id_camara, ' — ', localizacao) AS camara,\n",
+        "  CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', data_hora_leitura) AS data_hora,\n",
+        "  CAST(temperatura AS DOUBLE) AS valor,\n",
+        "  'Temperatura' AS serie\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_tendencia\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  nome_cd,\n",
+        "  CONCAT('Câmara ', id_camara, ' — ', localizacao),\n",
+        "  CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', data_hora_leitura),\n",
+        "  CAST(temperatura_min AS DOUBLE),\n",
+        "  'Limite mínimo'\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_tendencia\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  nome_cd,\n",
+        "  CONCAT('Câmara ', id_camara, ' — ', localizacao),\n",
+        "  CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', data_hora_leitura),\n",
+        "  CAST(temperatura_max AS DOUBLE),\n",
+        "  'Limite máximo'\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_tendencia\n"
+      ]
+    },
+    {
+      "name": "ds_gestor_prioridades",
+      "displayName": "Prioridades agora",
+      "queryLines": [
+        "SELECT\n",
+        "  id_alerta,\n",
+        "  CONCAT('Câmara ', id_camara) AS camara,\n",
+        "  localizacao,\n",
+        "  CASE gravidade_padronizada\n",
+        "    WHEN 'CRITICO' THEN 'Crítico'\n",
+        "    WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "    WHEN 'BAIXO' THEN 'Baixo'\n",
+        "    WHEN 'OUTRA' THEN 'Outra'\n",
+        "    ELSE gravidade_padronizada\n",
+        "  END AS gravidade,\n",
+        "  CASE\n",
+        "    WHEN status_atendimento = 'EM_ANDAMENTO' THEN 'Em atendimento'\n",
+        "    WHEN id_usuario_responsavel IS NULL THEN 'Sem responsável'\n",
+        "    WHEN status_atendimento = 'PENDENTE' THEN 'Pendente com responsável'\n",
+        "    ELSE 'Combinação não prevista'\n",
+        "  END AS situacao,\n",
+        "  COALESCE(nome_responsavel, 'Sem responsável') AS responsavel,\n",
+        "  DATE_FORMAT(\n",
+        "    CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', data_hora_alerta),\n",
+        "    'dd/MM/yyyy HH:mm'\n",
+        "  ) AS abertura_texto,\n",
+        "  CASE estado_sla\n",
+        "    WHEN 'SLA_VENCIDO' THEN 'Vencido'\n",
+        "    WHEN 'NO_PRAZO' THEN 'No prazo'\n",
+        "    WHEN 'PROXIMO_VENCIMENTO' THEN 'Próximo do vencimento'\n",
+        "    ELSE COALESCE(estado_sla, 'Sem referência')\n",
+        "  END AS sla,\n",
+        "  nome_cd,\n",
+        "  prioridade_gravidade,\n",
+        "  prioridade_sla,\n",
+        "  prioridade_status\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_prioridades\n",
+        "ORDER BY\n",
+        "  prioridade_gravidade,\n",
+        "  prioridade_sla,\n",
+        "  prioridade_status\n"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "d0a67738",
+      "displayName": "Painel",
+      "layout": [
+        {
+          "widget": {
+            "name": "logo_gestor",
+            "imageSpec": {
+              "image": {
+                "source": {
+                  "url": "https://dbc-917353eb-e6cf.cloud.databricks.com/ajax-api/2.0/workspace/export?path=/Users/marianaproque400%40gmail.com/logo%20azul%20com%20fundo.png&direct_download=true&format=AUTO&o=7474646794600881"
+                }
+              },
+              "frame": {},
+              "style": {}
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "txt_titulo_gestor",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Skadi — Gestor"
+              ]
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 5,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "txt_descricao_gestor",
+            "multilineTextboxSpec": {
+              "lines": [
+                "Câmaras, alertas e prioridades por CD. Critérios de offline e SLA pendentes de aprovação de negócio."
+              ]
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_cd",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/31247d7c0bf04410b92da372efe45691_nome_cd",
+                "query": {
+                  "datasetName": "ds_gestor_kpis",
+                  "fields": [
+                    {
+                      "name": "nome_cd",
+                      "expression": "`nome_cd`"
+                    },
+                    {
+                      "name": "nome_cd_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/2a40774bb4b241c6b23730fb7665064c_nome_cd",
+                "query": {
+                  "datasetName": "ds_gestor_estados",
+                  "fields": [
+                    {
+                      "name": "nome_cd",
+                      "expression": "`nome_cd`"
+                    },
+                    {
+                      "name": "nome_cd_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/e6ff32cdce2e4f5fad1b29e36401727c_nome_cd",
+                "query": {
+                  "datasetName": "ds_gestor_alertas_camara",
+                  "fields": [
+                    {
+                      "name": "nome_cd",
+                      "expression": "`nome_cd`"
+                    },
+                    {
+                      "name": "nome_cd_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/8438c369f70a40c694ea6bdf9466e1fb_nome_cd",
+                "query": {
+                  "datasetName": "ds_gestor_situacao",
+                  "fields": [
+                    {
+                      "name": "nome_cd",
+                      "expression": "`nome_cd`"
+                    },
+                    {
+                      "name": "nome_cd_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/6521640b0dcf431eb63fd7d6b20174aa_nome_cd",
+                "query": {
+                  "datasetName": "ds_gestor_tendencia",
+                  "fields": [
+                    {
+                      "name": "nome_cd",
+                      "expression": "`nome_cd`"
+                    },
+                    {
+                      "name": "nome_cd_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/e4b50e7311884b558a433e18d9e59be1_nome_cd",
+                "query": {
+                  "datasetName": "ds_gestor_prioridades",
+                  "fields": [
+                    {
+                      "name": "nome_cd",
+                      "expression": "`nome_cd`"
+                    },
+                    {
+                      "name": "nome_cd_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "CD"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "nome_cd",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/31247d7c0bf04410b92da372efe45691_nome_cd"
+                  },
+                  {
+                    "fieldName": "nome_cd",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/2a40774bb4b241c6b23730fb7665064c_nome_cd"
+                  },
+                  {
+                    "fieldName": "nome_cd",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/e6ff32cdce2e4f5fad1b29e36401727c_nome_cd"
+                  },
+                  {
+                    "fieldName": "nome_cd",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/8438c369f70a40c694ea6bdf9466e1fb_nome_cd"
+                  },
+                  {
+                    "fieldName": "nome_cd",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/6521640b0dcf431eb63fd7d6b20174aa_nome_cd"
+                  },
+                  {
+                    "fieldName": "nome_cd",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/e4b50e7311884b558a433e18d9e59be1_nome_cd"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_camara",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/01dff1cb9b5d43e09c9ded7f79a6a553_camara",
+                "query": {
+                  "datasetName": "ds_gestor_tendencia",
+                  "fields": [
+                    {
+                      "name": "camara",
+                      "expression": "`camara`"
+                    },
+                    {
+                      "name": "camara_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Câmara (uma por vez)"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "camara",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/01dff1cb9b5d43e09c9ded7f79a6a553_camara"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_periodo",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/b846e1f8f9c245eabbdf31a4be173c6b_data_hora",
+                "query": {
+                  "datasetName": "ds_gestor_tendencia",
+                  "fields": [
+                    {
+                      "name": "data_hora",
+                      "expression": "`data_hora`"
+                    },
+                    {
+                      "name": "data_hora_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Período"
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "data_hora",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/b846e1f8f9c245eabbdf31a4be173c6b_data_hora"
+                  }
+                ]
+              },
+              "presets": [
+                "now-6h~now",
+                "now-24h/h~now/h",
+                "now-7d/d~now/d"
+              ]
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_gravidade",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/81d09423da4f4d77b183f170eec98c38_gravidade",
+                "query": {
+                  "datasetName": "ds_gestor_alertas_camara",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "gravidade_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/fc42e133ab124394b5ecbd20e79af830_gravidade",
+                "query": {
+                  "datasetName": "ds_gestor_situacao",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "gravidade_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/32dc04f117484802ade2b92bb7e02d2f_gravidade",
+                "query": {
+                  "datasetName": "ds_gestor_prioridades",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "gravidade_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Gravidade"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "gravidade",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/81d09423da4f4d77b183f170eec98c38_gravidade"
+                  },
+                  {
+                    "fieldName": "gravidade",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/fc42e133ab124394b5ecbd20e79af830_gravidade"
+                  },
+                  {
+                    "fieldName": "gravidade",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/32dc04f117484802ade2b92bb7e02d2f_gravidade"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_situacao",
+            "queries": [
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/32b9f2c80eee4e1692edc5dd5838b132_situacao",
+                "query": {
+                  "datasetName": "ds_gestor_alertas_camara",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "situacao_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/5c9d6d2b0c5547db835cb5c203a5c15d_situacao",
+                "query": {
+                  "datasetName": "ds_gestor_situacao",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "situacao_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/8f58b934a2b94c79b4f9647bab561e96_situacao",
+                "query": {
+                  "datasetName": "ds_gestor_prioridades",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "situacao_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Situação"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "situacao",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/32b9f2c80eee4e1692edc5dd5838b132_situacao"
+                  },
+                  {
+                    "fieldName": "situacao",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/5c9d6d2b0c5547db835cb5c203a5c15d_situacao"
+                  },
+                  {
+                    "fieldName": "situacao",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/8f58b934a2b94c79b4f9647bab561e96_situacao"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 10,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_total_camaras",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(total_camaras)",
+                      "expression": "SUM(`total_camaras`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Total de câmaras"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_camaras)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_criticos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(alertas_criticos)",
+                      "expression": "SUM(`alertas_criticos`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas críticos abertos"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(alertas_criticos)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_sla_vencido",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(sla_vencido)",
+                      "expression": "SUM(`sla_vencido`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas com SLA vencido"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(sla_vencido)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_resolvidos_hoje",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(resolvidos_hoje)",
+                      "expression": "SUM(`resolvidos_hoje`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas resolvidos hoje"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(resolvidos_hoje)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_camaras_estado",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_estados",
+                  "fields": [
+                    {
+                      "name": "estado",
+                      "expression": "`estado`"
+                    },
+                    {
+                      "name": "sum(qtd)",
+                      "expression": "SUM(`qtd`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Estado das câmaras"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "estado",
+                  "axis": {
+                    "title": "Estado"
+                  },
+                  "displayName": "Estado",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(qtd)",
+                  "axis": {
+                    "title": "Câmaras"
+                  },
+                  "displayName": "Câmaras",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "estado",
+                  "displayName": "Estado",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 16,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_alertas_camara",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_alertas_camara",
+                  "fields": [
+                    {
+                      "name": "camara",
+                      "expression": "`camara`"
+                    },
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "sum(criticos)",
+                      "expression": "SUM(CASE WHEN `gravidade` = 'Crítico' THEN `alertas` ELSE 0 END)"
+                    },
+                    {
+                      "name": "sum(alertas)",
+                      "expression": "SUM(`alertas`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas abertos por câmara e gravidade"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "camara",
+                  "axis": {
+                    "title": "Câmara"
+                  },
+                  "displayName": "Câmara",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(alertas)",
+                  "axis": {
+                    "title": "Alertas abertos"
+                  },
+                  "displayName": "Alertas abertos",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "gravidade",
+                  "displayName": "Gravidade",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 12,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_situacao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_situacao",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "sum(alertas)",
+                      "expression": "SUM(`alertas`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Situação dos alertas abertos"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "situacao",
+                  "axis": {
+                    "title": "Situação"
+                  },
+                  "displayName": "Situação",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(alertas)",
+                  "axis": {
+                    "title": "Alertas abertos"
+                  },
+                  "displayName": "Alertas abertos",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "situacao",
+                  "displayName": "Situação",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 16,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "line_temperatura",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_tendencia",
+                  "fields": [
+                    {
+                      "name": "serie",
+                      "expression": "`serie`"
+                    },
+                    {
+                      "name": "data_hora",
+                      "expression": "`data_hora`"
+                    },
+                    {
+                      "name": "avg(valor)",
+                      "expression": "AVG(`valor`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Tendência da temperatura (°C)"
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "data_hora",
+                  "axis": {
+                    "title": "Data/hora da leitura"
+                  },
+                  "displayName": "Data/hora da leitura",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(valor)",
+                  "axis": {
+                    "title": "Temperatura (°C)"
+                  },
+                  "displayName": "Temperatura (°C)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "serie",
+                  "legend": {
+                    "position": "right",
+                    "title": "Série"
+                  },
+                  "displayName": "Série",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 23,
+            "width": 12,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "tabela_prioridades",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_prioridades",
+                  "fields": [
+                    {
+                      "name": "id_alerta",
+                      "expression": "`id_alerta`"
+                    },
+                    {
+                      "name": "camara",
+                      "expression": "`camara`"
+                    },
+                    {
+                      "name": "localizacao",
+                      "expression": "`localizacao`"
+                    },
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "responsavel",
+                      "expression": "`responsavel`"
+                    },
+                    {
+                      "name": "abertura_texto",
+                      "expression": "`abertura_texto`"
+                    },
+                    {
+                      "name": "sla",
+                      "expression": "`sla`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Prioridades agora"
+              },
+              "displayRowNumbers": false,
+              "rowsPerPage": 10,
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "id_alerta",
+                    "displayName": "Alerta",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "camara",
+                    "displayName": "Câmara",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "localizacao",
+                    "displayName": "Localização",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "gravidade",
+                    "displayName": "Gravidade",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "situacao",
+                    "displayName": "Situação",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "responsavel",
+                    "displayName": "Responsável",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "abertura_texto",
+                    "displayName": "Abertura",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "sla",
+                    "displayName": "SLA",
+                    "useForSearch": true
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 31,
+            "width": 12,
+            "height": 9
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#0A1B30",
+        "dark": "#0A1B30"
+      },
+      "widgetBackgroundColor": {
+        "light": "#0F2E4F",
+        "dark": "#0F2E4F"
+      },
+      "widgetBorderColor": {
+        "light": "#1F4468",
+        "dark": "#1F4468"
+      },
+      "fontColor": {
+        "light": "#C3D3E2",
+        "dark": "#C3D3E2"
+      },
+      "selectionColor": {
+        "light": "#2E8FEA",
+        "dark": "#2E8FEA"
+      },
+      "visualizationColors": [
+        "#2E8FEA",
+        "#A8D8FF",
+        "#55D8FF",
+        "#718096",
+        "#93A9BE",
+        "#4A6FA5",
+        "#1B4F8A",
+        "#2D3748",
+        "#B8D4EC",
+        "#5E7C97",
+        "#8FB8D8",
+        "#C3D3E2"
+      ],
+      "widgetHeaderAlignment": "LEFT",
+      "fontFamily": "Inter",
+      "widgetPadding": 12,
+      "widgetMargin": 8,
+      "widgetCornerRadius": 8,
+      "widgetShadow": 0,
+      "continuousGradient": {
+        "lightMode": {
+          "fromCategoricalIndex": 0
+        },
+        "darkMode": {
+          "fromCategoricalIndex": 0
+        }
+      },
+      "fontSettings": {
+        "base": {
+          "fontFamily": "Inter",
+          "fontColor": {
+            "light": "#C3D3E2",
+            "dark": "#C3D3E2"
+          },
+          "fontSize": 12,
+          "fontWeight": 400
+        },
+        "widgetTitle": {
+          "fontColor": {
+            "light": "#A8D8FF",
+            "dark": "#A8D8FF"
+          },
+          "fontSize": 13,
+          "fontWeight": 600
+        },
+        "widgetDescription": {
+          "fontSize": 12,
+          "fontWeight": 400
+        },
+        "fieldTitle": {
+          "textCase": "TEXT_CASE_UPPERCASE",
+          "fontColor": {
+            "light": "#718096",
+            "dark": "#718096"
+          },
+          "fontSize": 11,
+          "fontWeight": 400
+        },
+        "fieldValue": {
+          "fontColor": {
+            "light": "#C3D3E2",
+            "dark": "#C3D3E2"
+          },
+          "fontSize": 11,
+          "fontWeight": 400
+        }
+      },
+      "gridLineColor": {
+        "light": "#1F4468",
+        "dark": "#1F4468"
+      },
+      "axisLineColor": {
+        "light": "#2F5A80",
+        "dark": "#2F5A80"
+      },
+      "visualizationColorMappings": [
+        {
+          "value": "Registrado",
+          "color": "#718096"
+        },
+        {
+          "value": "Em atendimento",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Atendido",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Aberturas",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Finalizações",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Crítico",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Atenção",
+          "color": "#55D8FF"
+        },
+        {
+          "value": "Baixo",
+          "color": "#718096"
+        },
+        {
+          "value": "Outra",
+          "color": "#93A9BE"
+        },
+        {
+          "value": "Em andamento",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Pendente com responsável",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Pendente",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Sem responsável",
+          "color": "#718096"
+        },
+        {
+          "value": "Estáveis",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Fora da faixa",
+          "color": "#55D8FF"
+        },
+        {
+          "value": "Offline",
+          "color": "#718096"
+        },
+        {
+          "value": "Sem dados",
+          "color": "#93A9BE"
+        },
+        {
+          "value": "No prazo",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Próximo do vencimento",
+          "color": "#55D8FF"
+        },
+        {
+          "value": "Vencido",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Sem referência",
+          "color": "#718096"
+        },
+        {
+          "value": "Temperatura",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Limite mínimo",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Limite máximo",
+          "color": "#55D8FF"
+        },
+        {
+          "value": "Início da ocorrência",
+          "color": "#4A6FA5"
+        },
+        {
+          "value": "Início do atendimento",
+          "color": "#B8D4EC"
+        }
+      ]
+    },
+    "applyModeEnabled": false
+  }
+}
