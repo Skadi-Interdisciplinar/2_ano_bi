@@ -1,0 +1,2895 @@
+{
+  "datasets": [
+    {
+      "name": "ds_chamados_agregado",
+      "displayName": "ds_chamados_agregado",
+      "queryLines": [
+        "SELECT\n",
+        "  data_abertura,\n",
+        "  status,\n",
+        "  CASE status WHEN 'REGISTRADO' THEN 'Registrado' WHEN 'EM_ATENDIMENTO' THEN 'Em atendimento' WHEN 'ATENDIDO' THEN 'Atendido' END AS status_rotulo,\n",
+        "  categoria,\n",
+        "  CASE categoria WHEN 'DUVIDA' THEN 'Dúvida' WHEN 'SUGESTAO' THEN 'Sugestão' WHEN 'RECLAMACAO' THEN 'Reclamação' WHEN 'OUTRO' THEN 'Outro' END AS categoria_rotulo,\n",
+        "  cod_usuario_responsavel,\n",
+        "  COALESCE(responsavel_rotulo, 'SEM RESPONSAVEL') AS responsavel_agr,\n",
+        "  responsavel_nome,\n",
+        "  CASE WHEN COALESCE(responsavel_rotulo, 'SEM RESPONSAVEL') = 'SEM RESPONSAVEL' OR cod_usuario_responsavel IS NULL THEN 'Sem responsável' ELSE CONCAT(COALESCE(responsavel_nome, 'Sem nome'), ' (', CAST(cod_usuario_responsavel AS STRING), ')') END AS responsavel_display,\n",
+        "  nivel_acesso_solicitante,\n",
+        "  total_chamados,\n",
+        "  chamados_abertos,\n",
+        "  chamados_finalizados,\n",
+        "  soma_tempo_resolucao_horas,\n",
+        "  quantidade_resolucoes,\n",
+        "  versao_publicacao\n",
+        "FROM workspace.default.gold_site_chamados_por_abertura\n"
+      ],
+      "columns": [
+        {
+          "displayName": "tempo_medio_resolucao",
+          "description": "Tempo médio de resolução dos chamados ATENDIDO em horas: SUM(soma_tempo_resolucao_horas) / SUM(quantidade_resolucoes) — nunca média das médias; exibido com vírgula decimal e 2 casas; 'Sem resoluções' quando não há resoluções no período.",
+          "expression": "CASE WHEN SUM(`quantidade_resolucoes`) = 0 THEN 'Sem resoluções' ELSE REPLACE(STRING(ROUND(SUM(`soma_tempo_resolucao_horas`) / SUM(`quantidade_resolucoes`), 2)), '.', ',') END"
+        }
+      ]
+    },
+    {
+      "name": "ds_chamados_detalhe",
+      "displayName": "ds_chamados_detalhe",
+      "queryLines": [
+        "SELECT\n",
+        "  chamado_id,\n",
+        "  data_hora_abertura,\n",
+        "  data_hora_encerramento,\n",
+        "  data_abertura,\n",
+        "  categoria,\n",
+        "  CASE categoria WHEN 'DUVIDA' THEN 'Dúvida' WHEN 'SUGESTAO' THEN 'Sugestão' WHEN 'RECLAMACAO' THEN 'Reclamação' WHEN 'OUTRO' THEN 'Outro' END AS categoria_rotulo,\n",
+        "  status,\n",
+        "  CASE status WHEN 'REGISTRADO' THEN 'Registrado' WHEN 'EM_ATENDIMENTO' THEN 'Em atendimento' WHEN 'ATENDIDO' THEN 'Atendido' END AS status_rotulo,\n",
+        "  responsavel_nome,\n",
+        "  COALESCE(responsavel_rotulo, 'SEM RESPONSAVEL') AS responsavel_agr,\n",
+        "  CASE WHEN COALESCE(responsavel_rotulo, 'SEM RESPONSAVEL') = 'SEM RESPONSAVEL' THEN 'Sem responsável' ELSE COALESCE(responsavel_nome, 'Sem responsável') END AS responsavel_display,\n",
+        "  nivel_acesso_solicitante,\n",
+        "  ROUND(tempo_resolucao_horas, 2) AS tempo_resolucao_horas,\n",
+        "  CASE WHEN status = 'ATENDIDO' AND tempo_resolucao_horas IS NOT NULL THEN tempo_resolucao_horas END AS tempo_resolucao_atendido\n",
+        "FROM workspace.default.gold_site_chamados\n"
+      ]
+    },
+    {
+      "name": "ds_evolucao",
+      "displayName": "ds_evolucao",
+      "queryLines": [
+        "SELECT\n",
+        "  data_abertura AS data_evento,\n",
+        "  'Aberturas' AS tipo_evento,\n",
+        "  data_abertura,\n",
+        "  status,\n",
+        "  categoria,\n",
+        "  COALESCE(responsavel_rotulo, 'SEM RESPONSAVEL') AS responsavel_agr,\n",
+        "  nivel_acesso_solicitante,\n",
+        "  quantidade_chamados AS quantidade\n",
+        "FROM workspace.default.gold_site_chamados\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  COALESCE(data_encerramento, CAST(data_hora_encerramento AS DATE)) AS data_evento,\n",
+        "  'Finalizações' AS tipo_evento,\n",
+        "  data_abertura,\n",
+        "  status,\n",
+        "  categoria,\n",
+        "  COALESCE(responsavel_rotulo, 'SEM RESPONSAVEL') AS responsavel_agr,\n",
+        "  nivel_acesso_solicitante,\n",
+        "  1 AS quantidade\n",
+        "FROM workspace.default.gold_site_chamados\n",
+        "WHERE status = 'ATENDIDO'\n",
+        "  AND COALESCE(data_encerramento, CAST(data_hora_encerramento AS DATE)) IS NOT NULL\n"
+      ]
+    },
+    {
+      "name": "ds_usuarios",
+      "displayName": "ds_usuarios",
+      "queryLines": [
+        "SELECT\n",
+        "  nivel_acesso,\n",
+        "  CASE nivel_acesso WHEN 'OPERADOR' THEN 'Operador' WHEN 'GESTOR' THEN 'Gestor' WHEN 'ADMIN' THEN 'Admin' WHEN 'SUPER_ADMIN' THEN 'Super Admin' END AS nivel_rotulo,\n",
+        "  total_usuarios\n",
+        "FROM workspace.default.gold_site_usuarios_por_nivel\n"
+      ]
+    },
+    {
+      "name": "ds_rpa",
+      "displayName": "ds_rpa",
+      "queryLines": [
+        "SELECT\n",
+        "  nome_carga,\n",
+        "  ultima_execucao_sucesso,\n",
+        "  COALESCE(DATE_FORMAT(CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', ultima_execucao_sucesso), 'dd/MM/yyyy HH:mm'), 'Sem execução registrada') AS ultima_execucao_texto,\n",
+        "  CONCAT(nome_carga, ' — ', COALESCE(DATE_FORMAT(CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', ultima_execucao_sucesso), 'dd/MM/yyyy HH:mm'), 'Sem execução registrada')) AS resumo_carga\n",
+        "FROM workspace.default.gold_site_ultima_carga_rpa\n"
+      ]
+    },
+    {
+      "name": "ds_atualizacao",
+      "displayName": "ds_atualizacao",
+      "queryLines": [
+        "SELECT\n",
+        "  MIN(atualizado_em) AS atualizado_em,\n",
+        "  MIN(versao_publicacao) AS versao_publicacao,\n",
+        "  DATE_FORMAT(CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', MIN(atualizado_em)), 'dd/MM/yyyy HH:mm') AS atualizado_texto,\n",
+        "  COUNT(DISTINCT versao_publicacao) AS versoes_distintas\n",
+        "FROM (\n",
+        "  SELECT atualizado_em, versao_publicacao FROM workspace.default.gold_site_chamados\n",
+        "  UNION ALL SELECT atualizado_em, versao_publicacao FROM workspace.default.gold_site_chamados_por_abertura\n",
+        "  UNION ALL SELECT atualizado_em, versao_publicacao FROM workspace.default.gold_site_usuarios_por_nivel\n",
+        "  UNION ALL SELECT atualizado_em, versao_publicacao FROM workspace.default.gold_site_ultima_carga_rpa\n",
+        ")\n"
+      ]
+    },
+    {
+      "name": "ds_kpi_chamados_periodo",
+      "displayName": "Comparação de períodos — chamados",
+      "queryLines": [
+        "SELECT\n",
+        "  chamado_id,\n",
+        "  data_abertura,\n",
+        "  status,\n",
+        "  categoria,\n",
+        "  COALESCE(responsavel_rotulo, 'SEM RESPONSAVEL') AS responsavel_agr,\n",
+        "  CASE\n",
+        "    WHEN CAST(:periodo.min AS DATE) IS NULL THEN NULL\n",
+        "    WHEN\n",
+        "      data_abertura BETWEEN CAST(:periodo.min AS DATE) AND CAST(:periodo.max AS DATE)\n",
+        "    THEN\n",
+        "      'ATUAL'\n",
+        "    WHEN\n",
+        "      data_abertura BETWEEN\n",
+        "        DATE_SUB(\n",
+        "          CAST(:periodo.min AS DATE),\n",
+        "          DATEDIFF(CAST(:periodo.max AS DATE), CAST(:periodo.min AS DATE)) + 1\n",
+        "        )\n",
+        "      AND\n",
+        "        DATE_SUB(CAST(:periodo.min AS DATE), 1)\n",
+        "    THEN\n",
+        "      'ANTERIOR'\n",
+        "  END AS periodo,\n",
+        "  CASE\n",
+        "    WHEN\n",
+        "      CAST(:periodo.min AS DATE) IS NOT NULL\n",
+        "      AND data_abertura BETWEEN CAST(:periodo.min AS DATE) AND CAST(:periodo.max AS DATE)\n",
+        "    THEN\n",
+        "      1\n",
+        "    ELSE 0\n",
+        "  END AS is_atual,\n",
+        "  CASE\n",
+        "    WHEN\n",
+        "      CAST(:periodo.min AS DATE) IS NOT NULL\n",
+        "      AND data_abertura BETWEEN\n",
+        "        DATE_SUB(\n",
+        "          CAST(:periodo.min AS DATE),\n",
+        "          DATEDIFF(CAST(:periodo.max AS DATE), CAST(:periodo.min AS DATE)) + 1\n",
+        "        )\n",
+        "      AND\n",
+        "        DATE_SUB(CAST(:periodo.min AS DATE), 1)\n",
+        "    THEN\n",
+        "      1\n",
+        "    ELSE 0\n",
+        "  END AS is_anterior,\n",
+        "  CASE\n",
+        "    WHEN CAST(:periodo.min AS DATE) IS NULL THEN NULL\n",
+        "    ELSE\n",
+        "      CONCAT(\n",
+        "        DATE_FORMAT(CAST(:periodo.min AS DATE), 'dd/MM/yyyy'),\n",
+        "        ' – ',\n",
+        "        DATE_FORMAT(CAST(:periodo.max AS DATE), 'dd/MM/yyyy'),\n",
+        "        '  vs  ',\n",
+        "        DATE_FORMAT(\n",
+        "          DATE_SUB(\n",
+        "            CAST(:periodo.min AS DATE),\n",
+        "            DATEDIFF(CAST(:periodo.max AS DATE), CAST(:periodo.min AS DATE)) + 1\n",
+        "          ),\n",
+        "          'dd/MM/yyyy'\n",
+        "        ),\n",
+        "        ' – ',\n",
+        "        DATE_FORMAT(DATE_SUB(CAST(:periodo.min AS DATE), 1), 'dd/MM/yyyy')\n",
+        "      )\n",
+        "  END AS intervalo_texto,\n",
+        "  CASE\n",
+        "    WHEN\n",
+        "      CAST(:periodo.min AS DATE) IS NULL\n",
+        "    THEN\n",
+        "      'Selecione um período no filtro Período de abertura para comparar com o período anterior de mesma duração.'\n",
+        "  END AS aviso\n",
+        "FROM\n",
+        "  workspace.default.gold_site_chamados\n",
+        "WHERE\n",
+        "  CAST(:periodo.min AS DATE) IS NULL\n",
+        "  OR data_abertura BETWEEN\n",
+        "    DATE_SUB(\n",
+        "      CAST(:periodo.min AS DATE),\n",
+        "      DATEDIFF(CAST(:periodo.max AS DATE), CAST(:periodo.min AS DATE)) + 1\n",
+        "    )\n",
+        "  AND\n",
+        "    CAST(:periodo.max AS DATE)"
+      ]
+    },
+    {
+      "name": "ds_comparacao_chamados",
+      "displayName": "Comparação de períodos — chamados",
+      "config": {
+        "source": "workspace.default.gold_site_chamados",
+        "measures": [
+          {
+            "name": "total_periodo",
+            "expr": "COUNT(1) FILTER (WHERE janela = 'atual')"
+          },
+          {
+            "name": "total_anterior",
+            "expr": "COUNT(1) FILTER (WHERE janela = 'anterior')"
+          },
+          {
+            "name": "mensagem_comparacao",
+            "expr": "CASE\n  WHEN janela_atual IS NULL OR janela_atual.min IS NULL THEN 'Selecione o período de abertura para comparar'\n  WHEN MEASURE(total_anterior) = 0 THEN 'Sem base de comparação — o período anterior não tem chamados'\n  ELSE CONCAT(\n    REPLACE(STRING(ROUND((MEASURE(total_periodo) - MEASURE(total_anterior)) * 100.0 / MEASURE(total_anterior), 1)), '.', ','),\n    '% em relação ao período anterior (',\n    STRING(MEASURE(total_anterior)),\n    ' chamados no período anterior)'\n  )\nEND"
+          },
+          {
+            "name": "intervalo_comparado",
+            "expr": "MIN(CASE\n  WHEN janela_atual IS NULL OR janela_atual.min IS NULL THEN 'Selecione o período'\n  ELSE CONCAT(\n    'Atual: ', CAST(janela_atual.min AS STRING), ' a ', CAST(janela_atual.max AS STRING),\n    ' · Anterior: ',\n    CAST(DATE_SUB(janela_atual.min, DATEDIFF(janela_atual.max, janela_atual.min) + 1) AS STRING),\n    ' a ',\n    CAST(DATE_SUB(janela_atual.min, 1) AS STRING)\n  )\nEND)"
+          }
+        ],
+        "version": "1.1",
+        "comment": "Card de comparação de períodos — classifica cada chamado na janela atual ou anterior (mesma duração, terminando 1 dia antes do início do período selecionado)",
+        "dimensions": [
+          {
+            "name": "data_abertura",
+            "expr": "data_abertura"
+          },
+          {
+            "name": "janela",
+            "expr": "CASE\n  WHEN janela_atual IS NULL OR janela_atual.min IS NULL THEN 'sem_selecao'\n  WHEN data_abertura BETWEEN janela_atual.min AND janela_atual.max THEN 'atual'\n  WHEN data_abertura >= DATE_SUB(janela_atual.min, DATEDIFF(janela_atual.max, janela_atual.min) + 1)\n    AND data_abertura < janela_atual.min THEN 'anterior'\n  ELSE 'fora'\nEND"
+          },
+          {
+            "name": "status",
+            "expr": "status"
+          },
+          {
+            "name": "categoria",
+            "expr": "categoria"
+          },
+          {
+            "name": "responsavel_agr",
+            "expr": "COALESCE(responsavel_rotulo, 'SEM RESPONSAVEL')"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "janela_atual",
+            "dataType": "STRUCT<min DATE, max DATE>",
+            "default": null
+          }
+        ]
+      }
+    }
+  ],
+  "pages": [
+    {
+      "name": "page_visao_geral",
+      "displayName": "Visão geral",
+      "layout": [
+        {
+          "widget": {
+            "name": "txt_titulo",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Skadi — Superadmin"
+              ]
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 5,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "txt_descricao",
+            "multilineTextboxSpec": {
+              "lines": [
+                "Painel administrativo: chamados de suporte, usuários da plataforma e última carga RPA.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_periodo_abertura",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_data_abertura",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "data_abertura",
+                      "expression": "`data_abertura`"
+                    },
+                    {
+                      "name": "data_abertura_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_data_abertura",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "data_abertura",
+                      "expression": "`data_abertura`"
+                    },
+                    {
+                      "name": "data_abertura_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_data_abertura",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "data_abertura",
+                      "expression": "`data_abertura`"
+                    },
+                    {
+                      "name": "data_abertura_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Período de abertura dos chamados"
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "data_abertura",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_data_abertura"
+                  },
+                  {
+                    "fieldName": "data_abertura",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_data_abertura"
+                  },
+                  {
+                    "fieldName": "data_abertura",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_data_abertura"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_status",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_status",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_status",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_status",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d56a4776166cb0317b0b48c74b8e_status",
+                "query": {
+                  "datasetName": "ds_comparacao_chamados",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Status do chamado",
+                  "fields": []
+                }
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "status",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_status"
+                  },
+                  {
+                    "fieldName": "status",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_status"
+                  },
+                  {
+                    "fieldName": "status",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_status"
+                  },
+                  {
+                    "fieldName": "status",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d56a4776166cb0317b0b48c74b8e_status"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 8,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_categoria",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_categoria",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "categoria_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_categoria",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "categoria_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_categoria",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "categoria_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d56a4776166cb0317b0b48c74b8e_categoria",
+                "query": {
+                  "datasetName": "ds_comparacao_chamados",
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "categoria_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Categoria",
+                  "fields": []
+                }
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "categoria",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_categoria"
+                  },
+                  {
+                    "fieldName": "categoria",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_categoria"
+                  },
+                  {
+                    "fieldName": "categoria",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_categoria"
+                  },
+                  {
+                    "fieldName": "categoria",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d56a4776166cb0317b0b48c74b8e_categoria"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 8,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_responsavel",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_responsavel_agr",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "responsavel_agr",
+                      "expression": "`responsavel_agr`"
+                    },
+                    {
+                      "name": "responsavel_agr_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_responsavel_agr",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "responsavel_agr",
+                      "expression": "`responsavel_agr`"
+                    },
+                    {
+                      "name": "responsavel_agr_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_responsavel_agr",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "responsavel_agr",
+                      "expression": "`responsavel_agr`"
+                    },
+                    {
+                      "name": "responsavel_agr_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d56a4776166cb0317b0b48c74b8e_responsavel_agr",
+                "query": {
+                  "datasetName": "ds_comparacao_chamados",
+                  "fields": [
+                    {
+                      "name": "responsavel_agr",
+                      "expression": "`responsavel_agr`"
+                    },
+                    {
+                      "name": "responsavel_agr_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Responsável",
+                  "fields": []
+                }
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "responsavel_agr",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_responsavel_agr"
+                  },
+                  {
+                    "fieldName": "responsavel_agr",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_responsavel_agr"
+                  },
+                  {
+                    "fieldName": "responsavel_agr",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_responsavel_agr"
+                  },
+                  {
+                    "fieldName": "responsavel_agr",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d56a4776166cb0317b0b48c74b8e_responsavel_agr"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 8,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "counter_rpa_ultima_execucao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_rpa",
+                  "fields": [
+                    {
+                      "name": "ultima_execucao_texto",
+                      "expression": "`ultima_execucao_texto`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Última execução bem-sucedida (RPA)",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "ultima_execucao_texto",
+                  "style": {
+                    "fontColor": "#A8D8FF",
+                    "fontSize": 22,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "filterSources": {
+              "mode": "EXCLUDE",
+              "page": {
+                "all": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 5,
+            "width": 8,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_total_chamados",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "sum(total_chamados)",
+                      "expression": "SUM(`total_chamados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Total de chamados",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_chamados)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_chamados_abertos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "sum(chamados_abertos)",
+                      "expression": "SUM(`chamados_abertos`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Chamados abertos",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(chamados_abertos)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#A8D8FF",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_chamados_finalizados",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "sum(chamados_finalizados)",
+                      "expression": "SUM(`chamados_finalizados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Chamados finalizados",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(chamados_finalizados)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#55D8FF",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_total_usuarios",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_usuarios",
+                  "fields": [
+                    {
+                      "name": "sum(total_usuarios)",
+                      "expression": "SUM(`total_usuarios`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Total de usuários",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_usuarios)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "filterSources": {
+              "mode": "EXCLUDE",
+              "page": {
+                "all": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_chamados_status",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "status_rotulo",
+                      "expression": "`status_rotulo`"
+                    },
+                    {
+                      "name": "sum(total_chamados)",
+                      "expression": "SUM(`total_chamados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "fields": [],
+                  "value": "Chamados por status"
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "status_rotulo",
+                  "axis": {
+                    "title": "Status"
+                  },
+                  "displayName": "Status",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_chamados)",
+                  "axis": {
+                    "title": "Chamados"
+                  },
+                  "displayName": "Chamados",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "status_rotulo",
+                  "displayName": "Status",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_usuarios_perfil",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_usuarios",
+                  "fields": [
+                    {
+                      "name": "nivel_rotulo",
+                      "expression": "`nivel_rotulo`"
+                    },
+                    {
+                      "name": "sum(total_usuarios)",
+                      "expression": "SUM(`total_usuarios`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Usuários por perfil"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "nivel_rotulo",
+                  "axis": {
+                    "title": "Perfil"
+                  },
+                  "displayName": "Perfil",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_usuarios)",
+                  "axis": {
+                    "title": "Usuários"
+                  },
+                  "displayName": "Usuários",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "filterSources": {
+              "mode": "EXCLUDE",
+              "page": {
+                "all": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 29,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "line_evolucao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "tipo_evento",
+                      "expression": "`tipo_evento`"
+                    },
+                    {
+                      "name": "data_evento",
+                      "expression": "`data_evento`"
+                    },
+                    {
+                      "name": "sum(quantidade)",
+                      "expression": "SUM(`quantidade`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "fields": [],
+                  "value": "Aberturas e finalizações por dia"
+                }
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "data_evento",
+                  "axis": {
+                    "title": "Data do evento"
+                  },
+                  "displayName": "Data do evento",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(quantidade)",
+                  "axis": {
+                    "title": "Chamados"
+                  },
+                  "displayName": "Chamados",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "tipo_evento",
+                  "legend": {
+                    "position": "right",
+                    "title": "Série"
+                  },
+                  "displayName": "Série",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 23,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "card_tempo_medio_resolucao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "measure(tempo_medio_resolucao)",
+                      "expression": "MEASURE(`tempo_medio_resolucao`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Tempo médio de resolução (horas)",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(tempo_medio_resolucao)",
+                  "style": {
+                    "fontColor": "#718096",
+                    "fontSize": 28,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_chamados_categoria",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "categoria_rotulo",
+                      "expression": "`categoria_rotulo`"
+                    },
+                    {
+                      "name": "sum(total_chamados)",
+                      "expression": "SUM(`total_chamados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Chamados por categoria"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "categoria_rotulo",
+                  "axis": {
+                    "title": "Categoria"
+                  },
+                  "displayName": "Categoria",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_chamados)",
+                  "axis": {
+                    "title": "Chamados"
+                  },
+                  "displayName": "Chamados",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 11,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_chamados_responsavel",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "responsavel_display",
+                      "expression": "`responsavel_display`"
+                    },
+                    {
+                      "name": "sum(total_chamados)",
+                      "expression": "SUM(`total_chamados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Chamados por responsável",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "responsavel_display",
+                  "axis": {
+                    "title": "Responsável"
+                  },
+                  "displayName": "Responsável",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_chamados)",
+                  "axis": {
+                    "title": "Chamados"
+                  },
+                  "displayName": "Chamados",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "histograma_tempo_resolucao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "tempo_resolucao_atendido",
+                      "expression": "`tempo_resolucao_atendido`"
+                    },
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Distribuição do tempo de resolução (horas)"
+              },
+              "version": 3,
+              "widgetType": "histogram",
+              "encodings": {
+                "x": {
+                  "fieldName": "tempo_resolucao_atendido",
+                  "axis": {
+                    "title": "Tempo de resolução (horas)"
+                  },
+                  "displayName": "Tempo de resolução (horas)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "count(*)",
+                  "axis": {
+                    "title": "Chamados"
+                  },
+                  "displayName": "Chamados",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 17,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "card_comp_numero",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_comparacao_chamados",
+                  "fields": [
+                    {
+                      "name": "measure(total_periodo)",
+                      "expression": "MEASURE(`total_periodo`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Total de chamados no período",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(total_periodo)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2E8FEA",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 29,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_comp_mensagem",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_comparacao_chamados",
+                  "fields": [
+                    {
+                      "name": "measure(mensagem_comparacao)",
+                      "expression": "MEASURE(`mensagem_comparacao`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Variação vs. período anterior",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(mensagem_comparacao)",
+                  "style": {
+                    "fontColor": "#93A9BE",
+                    "fontSize": 14,
+                    "fontWeight": 500
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 32,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_comp_intervalo",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_comparacao_chamados",
+                  "fields": [
+                    {
+                      "name": "measure(intervalo_comparado)",
+                      "expression": "MEASURE(`intervalo_comparado`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Intervalo comparado",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(intervalo_comparado)",
+                  "style": {
+                    "fontColor": "#93A9BE",
+                    "fontSize": 13,
+                    "fontWeight": 400
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 32,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_periodo_comparacao",
+            "queries": [
+              {
+                "name": "parameter_dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d56a4776166cb0317b0b48c74b8e_janela_atual",
+                "query": {
+                  "datasetName": "ds_comparacao_chamados",
+                  "parameters": [
+                    {
+                      "name": "janela_atual",
+                      "keyword": "janela_atual"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Período para comparação"
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "janela_atual",
+                    "queryName": "parameter_dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d56a4776166cb0317b0b48c74b8e_janela_atual"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 29,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "line_comp_evolucao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_comparacao_chamados",
+                  "fields": [
+                    {
+                      "name": "data_abertura",
+                      "expression": "`data_abertura`"
+                    },
+                    {
+                      "name": "measure(total_periodo)",
+                      "expression": "MEASURE(`total_periodo`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`janela` IN ('atual')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Evolução diária de aberturas — período selecionado"
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "data_abertura",
+                  "axis": {
+                    "title": "Data de abertura"
+                  },
+                  "displayName": "Data de abertura",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(total_periodo)",
+                  "axis": {
+                    "title": "Aberturas por dia"
+                  },
+                  "displayName": "Aberturas por dia",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 35,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "dbca7191",
+            "imageSpec": {
+              "image": {
+                "source": {
+                  "url": "https://dbc-917353eb-e6cf.cloud.databricks.com/ajax-api/2.0/workspace/export?path=/Users/marianaproque400%40gmail.com/logo%20azul%20com%20fundo.png&direct_download=true&format=AUTO&o=7474646794600881"
+                }
+              },
+              "frame": {},
+              "style": {}
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "page_analise_suporte",
+      "displayName": "Análise de suporte",
+      "layout": [
+        {
+          "widget": {
+            "name": "filtro_periodo_abertura_p2",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_data_abertura",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "data_abertura",
+                      "expression": "`data_abertura`"
+                    },
+                    {
+                      "name": "data_abertura_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_data_abertura",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "data_abertura",
+                      "expression": "`data_abertura`"
+                    },
+                    {
+                      "name": "data_abertura_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_data_abertura",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "data_abertura",
+                      "expression": "`data_abertura`"
+                    },
+                    {
+                      "name": "data_abertura_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Período de abertura dos chamados"
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "data_abertura",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_data_abertura"
+                  },
+                  {
+                    "fieldName": "data_abertura",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_data_abertura"
+                  },
+                  {
+                    "fieldName": "data_abertura",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_data_abertura"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_status_p2",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_status",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_status",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_status",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Status do chamado"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "status",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_status"
+                  },
+                  {
+                    "fieldName": "status",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_status"
+                  },
+                  {
+                    "fieldName": "status",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_status"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_categoria_p2",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_categoria",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "categoria_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_categoria",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "categoria_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_categoria",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "categoria_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Categoria"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "categoria",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_categoria"
+                  },
+                  {
+                    "fieldName": "categoria",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_categoria"
+                  },
+                  {
+                    "fieldName": "categoria",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_categoria"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_responsavel_p2",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_responsavel_agr",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "responsavel_agr",
+                      "expression": "`responsavel_agr`"
+                    },
+                    {
+                      "name": "responsavel_agr_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_responsavel_agr",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "responsavel_agr",
+                      "expression": "`responsavel_agr`"
+                    },
+                    {
+                      "name": "responsavel_agr_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_responsavel_agr",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "responsavel_agr",
+                      "expression": "`responsavel_agr`"
+                    },
+                    {
+                      "name": "responsavel_agr_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Responsável"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "responsavel_agr",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_responsavel_agr"
+                  },
+                  {
+                    "fieldName": "responsavel_agr",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_responsavel_agr"
+                  },
+                  {
+                    "fieldName": "responsavel_agr",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_responsavel_agr"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_nivel_solicitante_p2",
+            "queries": [
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_nivel_acesso_solicitante",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "nivel_acesso_solicitante",
+                      "expression": "`nivel_acesso_solicitante`"
+                    },
+                    {
+                      "name": "nivel_acesso_solicitante_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_nivel_acesso_solicitante",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "nivel_acesso_solicitante",
+                      "expression": "`nivel_acesso_solicitante`"
+                    },
+                    {
+                      "name": "nivel_acesso_solicitante_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_nivel_acesso_solicitante",
+                "query": {
+                  "datasetName": "ds_evolucao",
+                  "fields": [
+                    {
+                      "name": "nivel_acesso_solicitante",
+                      "expression": "`nivel_acesso_solicitante`"
+                    },
+                    {
+                      "name": "nivel_acesso_solicitante_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Nível de acesso do solicitante"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "nivel_acesso_solicitante",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d10b9e6c3fe52b55d64_nivel_acesso_solicitante"
+                  },
+                  {
+                    "fieldName": "nivel_acesso_solicitante",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d14ab7b0d8389be2a4b_nivel_acesso_solicitante"
+                  },
+                  {
+                    "fieldName": "nivel_acesso_solicitante",
+                    "queryName": "dashboards/01f1d54c4c811b7cb468c5199aeeed3a/datasets/01f1d54c4c811d15aefd3dbf8b6d26bc_nivel_acesso_solicitante"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_chamados_categoria",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "categoria_rotulo",
+                      "expression": "`categoria_rotulo`"
+                    },
+                    {
+                      "name": "sum(total_chamados)",
+                      "expression": "SUM(`total_chamados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "showTitle": true,
+                "title": "Chamados por categoria"
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "categoria_rotulo",
+                  "displayName": "Categoria",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "axis": {
+                    "title": "Categoria"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_chamados)",
+                  "displayName": "Chamados",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "title": "Chamados"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_chamados_responsavel",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_agregado",
+                  "fields": [
+                    {
+                      "name": "responsavel_display",
+                      "expression": "`responsavel_display`"
+                    },
+                    {
+                      "name": "sum(total_chamados)",
+                      "expression": "SUM(`total_chamados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "orientation": "horizontal",
+              "frame": {
+                "showTitle": true,
+                "title": "Chamados por responsável"
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "responsavel_display",
+                  "displayName": "Responsável",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "axis": {
+                    "title": "Responsável"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_chamados)",
+                  "displayName": "Chamados",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "title": "Chamados"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 6,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "histograma_tempo_resolucao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "tempo_resolucao_atendido",
+                      "expression": "`tempo_resolucao_atendido`"
+                    },
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(*)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "histogram",
+              "frame": {
+                "showTitle": true,
+                "title": "Distribuição do tempo de resolução (horas)"
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "tempo_resolucao_atendido",
+                  "displayName": "Tempo de resolução (horas)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "title": "Tempo de resolução (horas)"
+                  }
+                },
+                "y": {
+                  "fieldName": "count(*)",
+                  "displayName": "Chamados",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "title": "Chamados"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 12,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "boxplot_tempo_resolucao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "categoria_rotulo",
+                      "expression": "`categoria_rotulo`"
+                    },
+                    {
+                      "name": "min(tempo_resolucao_atendido)",
+                      "expression": "MIN(`tempo_resolucao_atendido`)"
+                    },
+                    {
+                      "name": "q1(tempo_resolucao_atendido)",
+                      "expression": "PERCENTILE(`tempo_resolucao_atendido`, 0.25)"
+                    },
+                    {
+                      "name": "median(tempo_resolucao_atendido)",
+                      "expression": "MEDIAN(`tempo_resolucao_atendido`)"
+                    },
+                    {
+                      "name": "q3(tempo_resolucao_atendido)",
+                      "expression": "PERCENTILE(`tempo_resolucao_atendido`, 0.75)"
+                    },
+                    {
+                      "name": "max(tempo_resolucao_atendido)",
+                      "expression": "MAX(`tempo_resolucao_atendido`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`status` IN ('ATENDIDO')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Tempo de resolução por categoria (horas)"
+              },
+              "version": 3,
+              "widgetType": "box",
+              "encodings": {
+                "x": {
+                  "fieldName": "categoria_rotulo",
+                  "axis": {
+                    "title": "Categoria"
+                  },
+                  "displayName": "Categoria",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "whiskerStart": {
+                    "fieldName": "min(tempo_resolucao_atendido)"
+                  },
+                  "boxStart": {
+                    "fieldName": "q1(tempo_resolucao_atendido)"
+                  },
+                  "boxMid": {
+                    "fieldName": "median(tempo_resolucao_atendido)"
+                  },
+                  "boxEnd": {
+                    "fieldName": "q3(tempo_resolucao_atendido)"
+                  },
+                  "whiskerEnd": {
+                    "fieldName": "max(tempo_resolucao_atendido)"
+                  },
+                  "axis": {
+                    "title": "Tempo de resolução (horas)"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 12,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "tabela_detalhe",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_chamados_detalhe",
+                  "fields": [
+                    {
+                      "name": "chamado_id",
+                      "expression": "`chamado_id`"
+                    },
+                    {
+                      "name": "data_hora_abertura",
+                      "expression": "`data_hora_abertura`"
+                    },
+                    {
+                      "name": "categoria_rotulo",
+                      "expression": "`categoria_rotulo`"
+                    },
+                    {
+                      "name": "status_rotulo",
+                      "expression": "`status_rotulo`"
+                    },
+                    {
+                      "name": "responsavel_display",
+                      "expression": "`responsavel_display`"
+                    },
+                    {
+                      "name": "data_hora_encerramento",
+                      "expression": "`data_hora_encerramento`"
+                    },
+                    {
+                      "name": "tempo_resolucao_horas",
+                      "expression": "`tempo_resolucao_horas`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "frame": {
+                "showTitle": true,
+                "title": "Detalhe dos chamados"
+              },
+              "allowHTMLByDefault": false,
+              "condensed": false,
+              "itemsPerPage": 10,
+              "paginationSize": "default",
+              "withRowNumber": false,
+              "invisibleColumns": [],
+              "encodings": {
+                "columns": [
+                  {
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": true,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "dateTimeFormat": "YYYY-MM-DD",
+                    "displayAs": "string",
+                    "displayName": "ID do chamado",
+                    "fieldName": "chamado_id",
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "order": 1,
+                    "preserveWhitespace": false,
+                    "title": "ID do chamado",
+                    "type": "string",
+                    "useMonospaceFont": false,
+                    "visible": true
+                  },
+                  {
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": true,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "dateTimeFormat": "DD/MM/YYYY HH:mm",
+                    "displayAs": "string",
+                    "displayName": "Data/hora de abertura",
+                    "fieldName": "data_hora_abertura",
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "order": 2,
+                    "preserveWhitespace": false,
+                    "title": "Data/hora de abertura",
+                    "type": "string",
+                    "useMonospaceFont": false,
+                    "visible": true
+                  },
+                  {
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": true,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "dateTimeFormat": "YYYY-MM-DD",
+                    "displayAs": "string",
+                    "displayName": "Categoria",
+                    "fieldName": "categoria_rotulo",
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "order": 3,
+                    "preserveWhitespace": false,
+                    "title": "Categoria",
+                    "type": "string",
+                    "useMonospaceFont": false,
+                    "visible": true
+                  },
+                  {
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": true,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "dateTimeFormat": "YYYY-MM-DD",
+                    "displayAs": "string",
+                    "displayName": "Status",
+                    "fieldName": "status_rotulo",
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "order": 4,
+                    "preserveWhitespace": false,
+                    "title": "Status",
+                    "type": "string",
+                    "useMonospaceFont": false,
+                    "visible": true
+                  },
+                  {
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": true,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "dateTimeFormat": "YYYY-MM-DD",
+                    "displayAs": "string",
+                    "displayName": "Responsável",
+                    "fieldName": "responsavel_display",
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "order": 5,
+                    "preserveWhitespace": false,
+                    "title": "Responsável",
+                    "type": "string",
+                    "useMonospaceFont": false,
+                    "visible": true
+                  },
+                  {
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": true,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "dateTimeFormat": "DD/MM/YYYY HH:mm",
+                    "displayAs": "string",
+                    "displayName": "Data/hora de encerramento",
+                    "fieldName": "data_hora_encerramento",
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "order": 6,
+                    "preserveWhitespace": false,
+                    "title": "Data/hora de encerramento",
+                    "type": "string",
+                    "useMonospaceFont": false,
+                    "visible": true
+                  },
+                  {
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": true,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "dateTimeFormat": "YYYY-MM-DD",
+                    "displayAs": "string",
+                    "displayName": "Tempo de resolução (horas)",
+                    "fieldName": "tempo_resolucao_horas",
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "order": 7,
+                    "preserveWhitespace": false,
+                    "title": "Tempo de resolução (horas)",
+                    "type": "string",
+                    "useMonospaceFont": false,
+                    "visible": true
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 18,
+            "width": 12,
+            "height": 8
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#0A1B30",
+        "dark": "#0A1B30"
+      },
+      "widgetBackgroundColor": {
+        "light": "#0F2E4F",
+        "dark": "#0F2E4F"
+      },
+      "widgetBorderColor": {
+        "light": "#1F4468",
+        "dark": "#1F4468"
+      },
+      "fontColor": {
+        "light": "#C3D3E2",
+        "dark": "#C3D3E2"
+      },
+      "selectionColor": {
+        "light": "#2E8FEA",
+        "dark": "#2E8FEA"
+      },
+      "visualizationColors": [
+        "#2E8FEA",
+        "#A8D8FF",
+        "#55D8FF",
+        "#718096",
+        "#93A9BE",
+        "#4A6FA5",
+        "#1B4F8A",
+        "#2D3748",
+        "#B8D4EC",
+        "#5E7C97",
+        "#8FB8D8",
+        "#C3D3E2"
+      ],
+      "widgetHeaderAlignment": "LEFT",
+      "fontFamily": "Inter",
+      "widgetPadding": 12,
+      "widgetMargin": 8,
+      "widgetCornerRadius": 8,
+      "widgetShadow": 0,
+      "continuousGradient": {
+        "lightMode": {
+          "fromCategoricalIndex": 0
+        },
+        "darkMode": {
+          "fromCategoricalIndex": 0
+        }
+      },
+      "fontSettings": {
+        "base": {
+          "fontFamily": "Inter",
+          "fontColor": {
+            "light": "#C3D3E2",
+            "dark": "#C3D3E2"
+          },
+          "fontSize": 12,
+          "fontWeight": 400
+        },
+        "widgetTitle": {
+          "fontColor": {
+            "light": "#A8D8FF",
+            "dark": "#A8D8FF"
+          },
+          "fontSize": 13,
+          "fontWeight": 600
+        },
+        "widgetDescription": {
+          "fontSize": 12,
+          "fontWeight": 400
+        },
+        "fieldTitle": {
+          "textCase": "TEXT_CASE_UPPERCASE",
+          "fontColor": {
+            "light": "#718096",
+            "dark": "#718096"
+          },
+          "fontSize": 11,
+          "fontWeight": 400
+        },
+        "fieldValue": {
+          "fontColor": {
+            "light": "#C3D3E2",
+            "dark": "#C3D3E2"
+          },
+          "fontSize": 11,
+          "fontWeight": 400
+        }
+      },
+      "gridLineColor": {
+        "light": "#1F4468",
+        "dark": "#1F4468"
+      },
+      "axisLineColor": {
+        "light": "#2F5A80",
+        "dark": "#2F5A80"
+      },
+      "visualizationColorMappings": [
+        {
+          "value": "Registrado",
+          "color": "#718096"
+        },
+        {
+          "value": "Em atendimento",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Atendido",
+          "color": "#A8D8FF"
+        },
+        {
+          "value": "Aberturas",
+          "color": "#2E8FEA"
+        },
+        {
+          "value": "Finalizações",
+          "color": "#A8D8FF"
+        }
+      ]
+    },
+    "applyModeEnabled": false
+  }
+}
