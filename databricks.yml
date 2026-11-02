@@ -11,3 +11,7 @@ targets:
   dev:
     mode: development
     default: true
+
+sync:
+  include:
+    - app/notebooks/sla_rules.py
