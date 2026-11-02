@@ -50,6 +50,13 @@
         "      LPAD(CAST(MOD(minutos_restantes_sla, 60) AS STRING), 2, '0'), 'min'\n",
         "    )\n",
         "  END AS prazo_restante,\n",
+        "  CASE etapa_escalonamento\n",
+        "    WHEN 'OPERADOR' THEN 'Operador'\n",
+        "    WHEN 'GESTOR' THEN 'Gestor'\n",
+        "    WHEN 'ADMIN' THEN 'Admin'\n",
+        "    WHEN 'SLA_VENCIDO' THEN 'SLA vencido'\n",
+        "    ELSE 'Sem referência'\n",
+        "  END AS etapa_sla,\n",
         "  CASE\n",
         "    WHEN ROW_NUMBER() OVER (PARTITION BY id_usuario ORDER BY prioridade_fila, ordem_dentro_prioridade) = 1\n",
         "    THEN 'Próxima ocorrência'\n",
@@ -1176,7 +1183,7 @@
             "name": "nota_sla",
             "multilineTextboxSpec": {
               "lines": [
-                "**Critérios de SLA e de câmara offline pendentes de aprovação de negócio** — os estados de prazo exibidos refletem a regra vigente na base Gold e não a validam."
+                "Escalonamento previsto: 40% do prazo → gestor; 70% → admin; em 100%, SLA vencido. A fila mostra a etapa, mas não transfere o alerta automaticamente. Câmara offline após 10 min sem leitura."
               ]
             }
           },
@@ -1305,6 +1312,10 @@
                     {
                       "name": "prazo_restante",
                       "expression": "`prazo_restante`"
+                    },
+                    {
+                      "name": "etapa_sla",
+                      "expression": "`etapa_sla`"
                     }
                   ],
                   "disaggregated": true
@@ -1360,6 +1371,11 @@
                   {
                     "fieldName": "prazo_restante",
                     "displayName": "Prazo restante",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "etapa_sla",
+                    "displayName": "Etapa de escalonamento",
                     "useForSearch": true
                   }
                 ]
