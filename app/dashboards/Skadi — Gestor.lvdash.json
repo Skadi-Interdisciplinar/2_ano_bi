@@ -8,6 +8,9 @@
         "  id_cd,\n",
         "  nome_cd,\n",
         "  total_camaras,\n",
+        "  camaras_estaveis,\n",
+        "  camaras_em_alerta_temperatura,\n",
+        "  camaras_offline,\n",
         "  alertas_criticos,\n",
         "  sla_vencido,\n",
         "  resolvidos_hoje\n",
@@ -183,6 +186,11 @@
         "    ELSE 'Combinação não prevista'\n",
         "  END AS situacao,\n",
         "  COALESCE(nome_responsavel, 'Sem responsável') AS responsavel,\n",
+        "  temperatura_atual,\n",
+        "  temperatura_min,\n",
+        "  temperatura_max,\n",
+        "  ROUND(100 * percentual_consumido_sla, 1) AS sla_consumido_percentual,\n",
+        "  tempo_desde_alerta_minutos,\n",
         "  DATE_FORMAT(\n",
         "    CONVERT_TIMEZONE('UTC', 'America/Sao_Paulo', data_hora_alerta),\n",
         "    'dd/MM/yyyy HH:mm'\n",
@@ -202,7 +210,8 @@
         "ORDER BY\n",
         "  prioridade_gravidade,\n",
         "  prioridade_sla,\n",
-        "  prioridade_status\n"
+        "  prioridade_status,\n",
+        "  data_hora_alerta ASC\n"
       ]
     }
   ],
@@ -252,7 +261,7 @@
             "name": "txt_descricao_gestor",
             "multilineTextboxSpec": {
               "lines": [
-                "Câmaras, alertas e prioridades por CD. Critérios de offline e SLA pendentes de aprovação de negócio."
+                "Acompanhe câmaras e alertas do CD. Offline após 10 min sem leitura; SLA próximo do vencimento a partir de 70% e vencido ao atingir 100% do prazo."
               ]
             }
           },
@@ -376,7 +385,7 @@
                 "showTitle": true,
                 "title": "CD"
               },
-              "widgetType": "filter-multi-select",
+              "widgetType": "filter-single-select",
               "encodings": {
                 "fields": [
                   {
@@ -442,7 +451,7 @@
                 "showTitle": true,
                 "title": "Câmara (uma por vez)"
               },
-              "widgetType": "filter-multi-select",
+              "widgetType": "filter-single-select",
               "encodings": {
                 "fields": [
                   {
@@ -724,7 +733,7 @@
                     "type": "number-plain"
                   },
                   "style": {
-                    "fontColor": "#2E8FEA",
+                    "fontColor": "#A8D8FF",
                     "fontSize": 32,
                     "fontWeight": 700
                   }
@@ -779,7 +788,7 @@
                     "type": "number-plain"
                   },
                   "style": {
-                    "fontColor": "#2E8FEA",
+                    "fontColor": "#E63946",
                     "fontSize": 32,
                     "fontWeight": 700
                   }
@@ -834,7 +843,7 @@
                     "type": "number-plain"
                   },
                   "style": {
-                    "fontColor": "#2E8FEA",
+                    "fontColor": "#E63946",
                     "fontSize": 32,
                     "fontWeight": 700
                   }
@@ -889,7 +898,7 @@
                     "type": "number-plain"
                   },
                   "style": {
-                    "fontColor": "#2E8FEA",
+                    "fontColor": "#2FBF71",
                     "fontSize": 32,
                     "fontWeight": 700
                   }
@@ -932,7 +941,7 @@
             "spec": {
               "frame": {
                 "showTitle": true,
-                "title": "Estado das câmaras"
+                "title": "Câmaras por estado térmico e conectividade (dimensões independentes)"
               },
               "version": 3,
               "widgetType": "bar",
@@ -972,7 +981,7 @@
           },
           "position": {
             "x": 0,
-            "y": 16,
+            "y": 19,
             "width": 6,
             "height": 7
           }
@@ -1050,7 +1059,7 @@
           },
           "position": {
             "x": 0,
-            "y": 8,
+            "y": 11,
             "width": 12,
             "height": 8
           }
@@ -1120,7 +1129,7 @@
           },
           "position": {
             "x": 6,
-            "y": 16,
+            "y": 19,
             "width": 6,
             "height": 7
           }
@@ -1154,7 +1163,7 @@
             "spec": {
               "frame": {
                 "showTitle": true,
-                "title": "Tendência da temperatura (°C)"
+                "title": "Histórico de temperatura da câmara (°C)"
               },
               "version": 3,
               "widgetType": "line",
@@ -1198,7 +1207,7 @@
           },
           "position": {
             "x": 0,
-            "y": 23,
+            "y": 26,
             "width": 12,
             "height": 8
           }
@@ -1241,6 +1250,26 @@
                       "expression": "`abertura_texto`"
                     },
                     {
+                      "name": "temperatura_atual",
+                      "expression": "`temperatura_atual`"
+                    },
+                    {
+                      "name": "temperatura_min",
+                      "expression": "`temperatura_min`"
+                    },
+                    {
+                      "name": "temperatura_max",
+                      "expression": "`temperatura_max`"
+                    },
+                    {
+                      "name": "sla_consumido_percentual",
+                      "expression": "`sla_consumido_percentual`"
+                    },
+                    {
+                      "name": "tempo_desde_alerta_minutos",
+                      "expression": "`tempo_desde_alerta_minutos`"
+                    },
+                    {
                       "name": "sla",
                       "expression": "`sla`"
                     }
@@ -1276,6 +1305,31 @@
                     "useForSearch": true
                   },
                   {
+                    "fieldName": "temperatura_atual",
+                    "displayName": "Temperatura atual (°C)",
+                    "useForSearch": false
+                  },
+                  {
+                    "fieldName": "temperatura_min",
+                    "displayName": "Mín. recomendada (°C)",
+                    "useForSearch": false
+                  },
+                  {
+                    "fieldName": "temperatura_max",
+                    "displayName": "Máx. recomendada (°C)",
+                    "useForSearch": false
+                  },
+                  {
+                    "fieldName": "tempo_desde_alerta_minutos",
+                    "displayName": "Minutos desde o alerta",
+                    "useForSearch": false
+                  },
+                  {
+                    "fieldName": "sla_consumido_percentual",
+                    "displayName": "SLA consumido (%)",
+                    "useForSearch": false
+                  },
+                  {
                     "fieldName": "gravidade",
                     "displayName": "Gravidade",
                     "useForSearch": true
@@ -1309,9 +1363,174 @@
           },
           "position": {
             "x": 0,
-            "y": 31,
+            "y": 34,
             "width": 12,
             "height": 9
+          }
+        },
+        {
+          "widget": {
+            "name": "card_camaras_estaveis",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(camaras_estaveis)",
+                      "expression": "SUM(`camaras_estaveis`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Câmaras estáveis"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(camaras_estaveis)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#2FBF71",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_camaras_fora_faixa",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(camaras_em_alerta_temperatura)",
+                      "expression": "SUM(`camaras_em_alerta_temperatura`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Câmaras fora da faixa"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(camaras_em_alerta_temperatura)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#FFC857",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 8,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "card_camaras_offline",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_kpis",
+                  "fields": [
+                    {
+                      "name": "sum(camaras_offline)",
+                      "expression": "SUM(`camaras_offline`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Câmaras offline"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(camaras_offline)",
+                  "format": {
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "style": {
+                    "fontColor": "#718096",
+                    "fontSize": 32,
+                    "fontWeight": 700
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 8,
+            "width": 4,
+            "height": 3
           }
         }
       ],
@@ -1343,17 +1562,14 @@
       },
       "visualizationColors": [
         "#2E8FEA",
+        "#2FBF71",
+        "#FFC857",
+        "#E63946",
         "#A8D8FF",
-        "#55D8FF",
         "#718096",
-        "#93A9BE",
-        "#4A6FA5",
-        "#1B4F8A",
+        "#55D8FF",
         "#2D3748",
-        "#B8D4EC",
-        "#5E7C97",
-        "#8FB8D8",
-        "#C3D3E2"
+        "#0F2E4F"
       ],
       "widgetHeaderAlignment": "LEFT",
       "fontFamily": "Inter",
@@ -1440,15 +1656,15 @@
         },
         {
           "value": "Crítico",
-          "color": "#2E8FEA"
+          "color": "#E63946"
         },
         {
           "value": "Atenção",
-          "color": "#55D8FF"
+          "color": "#FFC857"
         },
         {
           "value": "Baixo",
-          "color": "#718096"
+          "color": "#2E8FEA"
         },
         {
           "value": "Outra",
@@ -1472,11 +1688,11 @@
         },
         {
           "value": "Estáveis",
-          "color": "#A8D8FF"
+          "color": "#2FBF71"
         },
         {
           "value": "Fora da faixa",
-          "color": "#55D8FF"
+          "color": "#FFC857"
         },
         {
           "value": "Offline",
@@ -1484,19 +1700,19 @@
         },
         {
           "value": "Sem dados",
-          "color": "#93A9BE"
-        },
-        {
-          "value": "No prazo",
           "color": "#A8D8FF"
         },
         {
+          "value": "No prazo",
+          "color": "#2FBF71"
+        },
+        {
           "value": "Próximo do vencimento",
-          "color": "#55D8FF"
+          "color": "#FFC857"
         },
         {
           "value": "Vencido",
-          "color": "#2E8FEA"
+          "color": "#E63946"
         },
         {
           "value": "Sem referência",
@@ -1508,11 +1724,11 @@
         },
         {
           "value": "Limite mínimo",
-          "color": "#A8D8FF"
+          "color": "#2FBF71"
         },
         {
           "value": "Limite máximo",
-          "color": "#55D8FF"
+          "color": "#E63946"
         },
         {
           "value": "Início da ocorrência",
