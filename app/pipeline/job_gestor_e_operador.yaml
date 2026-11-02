@@ -1,0 +1,38 @@
+resources:
+  jobs:
+    Skadi_Gestor_e_Operador:
+      name: Skadi Gestor e Operador
+      tasks:
+        - task_key: bronze_app
+          notebook_task:
+            notebook_path: /Workspace/Users/marianaproque400@gmail.com/2_ano_bi/app/notebooks/bronze_app
+            source: WORKSPACE
+          environment_key: Default
+        - task_key: silver_app
+          depends_on:
+            - task_key: bronze_app
+          notebook_task:
+            notebook_path: /Workspace/Users/marianaproque400@gmail.com/2_ano_bi/app/notebooks/silver_app
+            source: WORKSPACE
+          environment_key: Default
+        - task_key: gold_app_gestor
+          depends_on:
+            - task_key: silver_app
+          notebook_task:
+            notebook_path: /Workspace/Users/marianaproque400@gmail.com/2_ano_bi/app/notebooks/gold_app_gestor
+            source: WORKSPACE
+          environment_key: Default
+        - task_key: gold_app_operario
+          depends_on:
+            - task_key: silver_app
+          notebook_task:
+            notebook_path: /Workspace/Users/marianaproque400@gmail.com/2_ano_bi/app/notebooks/gold_app_operario
+            source: WORKSPACE
+          environment_key: Default
+      queue:
+        enabled: true
+      environments:
+        - environment_key: Default
+          spec:
+            environment_version: "6"
+      performance_target: PERFORMANCE_OPTIMIZED
