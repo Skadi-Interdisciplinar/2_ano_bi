@@ -201,6 +201,13 @@
         "    WHEN 'PROXIMO_VENCIMENTO' THEN 'Próximo do vencimento'\n",
         "    ELSE COALESCE(estado_sla, 'Sem referência')\n",
         "  END AS sla,\n",
+        "  CASE etapa_escalonamento\n",
+        "    WHEN 'OPERADOR' THEN 'Operador'\n",
+        "    WHEN 'GESTOR' THEN 'Gestor'\n",
+        "    WHEN 'ADMIN' THEN 'Admin'\n",
+        "    WHEN 'SLA_VENCIDO' THEN 'SLA vencido'\n",
+        "    ELSE 'Sem referência'\n",
+        "  END AS etapa_sla,\n",
         "  nome_cd,\n",
         "  prioridade_gravidade,\n",
         "  prioridade_sla,\n",
@@ -308,7 +315,7 @@
             "name": "txt_descricao_gestor",
             "multilineTextboxSpec": {
               "lines": [
-                "Acompanhe câmaras e alertas do CD. Offline após 10 min sem leitura; SLA próximo do vencimento a partir de 70% e vencido ao atingir 100% do prazo."
+                "Acompanhe câmaras e alertas do CD. Etapa SLA: Gestor a partir de 40%, Admin a partir de 70% e vencido em 100%. Offline após 10 min sem leitura."
               ]
             }
           },
@@ -1382,6 +1389,10 @@
                     {
                       "name": "sla",
                       "expression": "`sla`"
+                    },
+                    {
+                      "name": "etapa_sla",
+                      "expression": "`etapa_sla`"
                     }
                   ],
                   "disaggregated": true
@@ -1462,6 +1473,11 @@
                   {
                     "fieldName": "sla",
                     "displayName": "SLA",
+                    "useForSearch": true
+                  },
+                  {
+                    "fieldName": "etapa_sla",
+                    "displayName": "Etapa de escalonamento",
                     "useForSearch": true
                   }
                 ]
