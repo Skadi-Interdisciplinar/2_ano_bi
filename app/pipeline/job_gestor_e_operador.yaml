@@ -5,28 +5,28 @@ resources:
       tasks:
         - task_key: bronze_app
           notebook_task:
-            notebook_path: /Workspace/Users/marianaproque400@gmail.com/2_ano_bi/app/notebooks/bronze_app
+            notebook_path: ../notebooks/bronze_app.ipynb
             source: WORKSPACE
           environment_key: Default
         - task_key: silver_app
           depends_on:
             - task_key: bronze_app
           notebook_task:
-            notebook_path: /Workspace/Users/marianaproque400@gmail.com/2_ano_bi/app/notebooks/silver_app
+            notebook_path: ../notebooks/silver_app.ipynb
             source: WORKSPACE
           environment_key: Default
         - task_key: gold_app_gestor
           depends_on:
             - task_key: silver_app
           notebook_task:
-            notebook_path: /Workspace/Users/marianaproque400@gmail.com/2_ano_bi/app/notebooks/gold_app_gestor
+            notebook_path: ../notebooks/gold_app_gestor.ipynb
             source: WORKSPACE
           environment_key: Default
         - task_key: gold_app_operario
           depends_on:
             - task_key: silver_app
           notebook_task:
-            notebook_path: /Workspace/Users/marianaproque400@gmail.com/2_ano_bi/app/notebooks/gold_app_operario
+            notebook_path: ../notebooks/gold_app_operario.ipynb
             source: WORKSPACE
           environment_key: Default
       queue:
