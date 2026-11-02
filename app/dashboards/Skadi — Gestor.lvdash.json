@@ -213,6 +213,53 @@
         "  prioridade_status,\n",
         "  data_hora_alerta ASC\n"
       ]
+    },
+    {
+      "name": "ds_gestor_equipe",
+      "displayName": "Alertas abertos por responsável e situação",
+      "queryLines": [
+        "SELECT\n",
+        "  nome_cd,\n",
+        "  CASE\n",
+        "    WHEN id_usuario_responsavel IS NULL THEN 'Sem responsável'\n",
+        "    ELSE COALESCE(nome_responsavel, 'Responsável sem nome')\n",
+        "  END AS responsavel,\n",
+        "  CASE\n",
+        "    WHEN id_usuario_responsavel IS NULL THEN 'Sem responsável'\n",
+        "    WHEN status_atendimento = 'EM_ANDAMENTO' THEN 'Em atendimento'\n",
+        "    WHEN status_atendimento = 'PENDENTE' THEN 'Pendente com responsável'\n",
+        "    ELSE 'Outra situação'\n",
+        "  END AS situacao,\n",
+        "  CASE gravidade_padronizada\n",
+        "    WHEN 'CRITICO' THEN 'Crítico'\n",
+        "    WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "    WHEN 'BAIXO' THEN 'Baixo'\n",
+        "    WHEN 'OUTRA' THEN 'Outra'\n",
+        "    ELSE gravidade_padronizada\n",
+        "  END AS gravidade,\n",
+        "  COUNT(DISTINCT id_alerta) AS alertas\n",
+        "FROM\n",
+        "  workspace.gold_app.gold_app_gestor_prioridades\n",
+        "GROUP BY\n",
+        "  nome_cd,\n",
+        "  CASE\n",
+        "    WHEN id_usuario_responsavel IS NULL THEN 'Sem responsável'\n",
+        "    ELSE COALESCE(nome_responsavel, 'Responsável sem nome')\n",
+        "  END,\n",
+        "  CASE\n",
+        "    WHEN id_usuario_responsavel IS NULL THEN 'Sem responsável'\n",
+        "    WHEN status_atendimento = 'EM_ANDAMENTO' THEN 'Em atendimento'\n",
+        "    WHEN status_atendimento = 'PENDENTE' THEN 'Pendente com responsável'\n",
+        "    ELSE 'Outra situação'\n",
+        "  END,\n",
+        "  CASE gravidade_padronizada\n",
+        "    WHEN 'CRITICO' THEN 'Crítico'\n",
+        "    WHEN 'ATENCAO' THEN 'Atenção'\n",
+        "    WHEN 'BAIXO' THEN 'Baixo'\n",
+        "    WHEN 'OUTRA' THEN 'Outra'\n",
+        "    ELSE gravidade_padronizada\n",
+        "  END\n"
+      ]
     }
   ],
   "pages": [
@@ -377,6 +424,23 @@
                   ],
                   "disaggregated": false
                 }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/e92286c8a31541d59c1ae0b0ef428453_nome_cd",
+                "query": {
+                  "datasetName": "ds_gestor_equipe",
+                  "fields": [
+                    {
+                      "name": "nome_cd",
+                      "expression": "`nome_cd`"
+                    },
+                    {
+                      "name": "nome_cd_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
               }
             ],
             "spec": {
@@ -411,6 +475,10 @@
                   {
                     "fieldName": "nome_cd",
                     "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/e4b50e7311884b558a433e18d9e59be1_nome_cd"
+                  },
+                  {
+                    "fieldName": "nome_cd",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/e92286c8a31541d59c1ae0b0ef428453_nome_cd"
                   }
                 ]
               }
@@ -574,6 +642,23 @@
                   ],
                   "disaggregated": false
                 }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/0eb3515774a34f089ee58d95eb113c3f_gravidade",
+                "query": {
+                  "datasetName": "ds_gestor_equipe",
+                  "fields": [
+                    {
+                      "name": "gravidade",
+                      "expression": "`gravidade`"
+                    },
+                    {
+                      "name": "gravidade_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
               }
             ],
             "spec": {
@@ -596,6 +681,10 @@
                   {
                     "fieldName": "gravidade",
                     "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/32dc04f117484802ade2b92bb7e02d2f_gravidade"
+                  },
+                  {
+                    "fieldName": "gravidade",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/0eb3515774a34f089ee58d95eb113c3f_gravidade"
                   }
                 ]
               }
@@ -662,6 +751,23 @@
                   ],
                   "disaggregated": false
                 }
+              },
+              {
+                "name": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/c750ab3138ba4549a73dc1166968f76e_situacao",
+                "query": {
+                  "datasetName": "ds_gestor_equipe",
+                  "fields": [
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "situacao_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
               }
             ],
             "spec": {
@@ -684,6 +790,10 @@
                   {
                     "fieldName": "situacao",
                     "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/8f58b934a2b94c79b4f9647bab561e96_situacao"
+                  },
+                  {
+                    "fieldName": "situacao",
+                    "queryName": "dashboards/01f1d598f81c11659919d9fde175e1d3/datasets/c750ab3138ba4549a73dc1166968f76e_situacao"
                   }
                 ]
               }
@@ -1060,7 +1170,7 @@
           "position": {
             "x": 0,
             "y": 11,
-            "width": 12,
+            "width": 6,
             "height": 8
           }
         },
@@ -1531,6 +1641,84 @@
             "y": 8,
             "width": 4,
             "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_equipe",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gestor_equipe",
+                  "fields": [
+                    {
+                      "name": "responsavel",
+                      "expression": "`responsavel`"
+                    },
+                    {
+                      "name": "situacao",
+                      "expression": "`situacao`"
+                    },
+                    {
+                      "name": "sum(alertas)",
+                      "expression": "SUM(`alertas`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Alertas abertos por responsável e situação"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(alertas)",
+                  "axis": {
+                    "title": "Alertas abertos"
+                  },
+                  "displayName": "Alertas abertos",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "responsavel",
+                  "axis": {
+                    "title": "Responsável"
+                  },
+                  "displayName": "Responsável",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "situacao",
+                  "legend": {
+                    "position": "right",
+                    "title": "Situação"
+                  },
+                  "displayName": "Situação",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 11,
+            "width": 6,
+            "height": 8
           }
         }
       ],
